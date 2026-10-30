@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+
+# Данные и секреты
+.env
+.data/
+backend/.e2e-data/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
+# IDE и ОС
+.DS_Store
+.idea/
+.vscode/
