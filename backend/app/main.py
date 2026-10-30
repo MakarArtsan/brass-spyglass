@@ -10,8 +10,10 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import db as database
+from app import uploads
 from app.api import auth as auth_api
 from app.api import entities, health, me
+from app.api import files as files_api
 from app.auth.telegram import TelegramService
 from app.auth.tokens import LoginTokenStore
 from app.config import get_settings
@@ -19,6 +21,7 @@ from app.migrate import upgrade_to_head
 from app.permissions import PermissionDenied
 from app.services import projects, seed
 from app.services.core import ConflictError, NotFoundError, ValidationError
+from app.worker import JobRunner
 
 log = logging.getLogger("app")
 
@@ -43,6 +46,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if not settings.session_secret:
         log.warning("SESSION_SECRET не задан: сессии пропадут при перезапуске")
 
+    uploads.cleanup_stale(settings)
+    app.state.upload_locks = {}
+    app.state.jobs = JobRunner()
+    await app.state.jobs.start()
+
     app.state.tokens = LoginTokenStore(settings.login_token_ttl_sec)
     app.state.tg = TelegramService(settings, app.state.tokens)
     await app.state.tg.start()
@@ -50,6 +58,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         await app.state.tg.stop()
+        await app.state.jobs.stop()
 
 
 def create_app() -> FastAPI:
@@ -75,6 +84,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_api.router, prefix="/api")
     app.include_router(me.router, prefix="/api")
     app.include_router(entities.router, prefix="/api")
+    app.include_router(files_api.router, prefix="/api")
 
     @app.api_route("/api/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
     async def _api_not_found(rest: str) -> JSONResponse:

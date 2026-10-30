@@ -6,3 +6,6 @@ telethon==1.45.0
 itsdangerous==2.2.0
 pydantic-settings==2.16.2
 openpyxl==3.1.5
+pillow==13.0.0
+pillow-heif==1.8.1
+pypdfium2==5.14.0

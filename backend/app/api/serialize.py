@@ -285,3 +285,60 @@ def entity_labels(db: Session, pairs: set[tuple[str, int | None]]) -> dict[tuple
     fill(EntityType.FILE, models.File, lambda r: f"файл {r.original_name or r.id}")
     fill(EntityType.USER, models.User, lambda r: f"участник {r.name}")
     return out
+
+
+# --- файлы -----------------------------------------------------------------------------------
+
+
+def file_urls(file: models.File) -> dict[str, str]:
+    """Подписанные ссылки на то, что у файла уже готово (превью появляются после обработки)."""
+    urls = {"original": file_url(file.id, "original")}
+    ready = bool(file.thumb_path)
+    if ready:
+        urls["thumb"] = file_url(file.id, "thumb")
+    if file.kind == "video":
+        if ready:
+            urls["poster"] = file_url(file.id, "poster")
+        urls["play"] = file_url(file.id, "proxy" if file.proxy_path else "original")
+    elif file.kind == "image" and ready:
+        urls["preview"] = file_url(file.id, "preview")
+    elif file.kind == "audio":
+        urls["play"] = urls["original"]
+        if file.waveform_json:
+            urls["waveform"] = file_url(file.id, "waveform")
+    elif file.kind == "document" and ready:
+        urls["preview"] = file_url(file.id, "preview")
+    return urls
+
+
+def files_out(db: Session, files: list[models.File]) -> list[dict[str, Any]]:
+    from app.services import jobs
+
+    active, failed = jobs.file_activity(db, [f.id for f in files])
+    uploaders = authors(db, {f.uploaded_by for f in files})
+    out = []
+    for f in files:
+        out.append(
+            {
+                "id": f.id,
+                "kind": f.kind,
+                "source": f.source,
+                "original_name": f.original_name,
+                "mime": f.mime,
+                "size_bytes": f.size_bytes,
+                "sha256": f.sha256,
+                "duration_sec": f.duration_sec,
+                "width": f.width,
+                "height": f.height,
+                "fps": f.fps,
+                "ai_tool": f.ai_tool,
+                "ai_prompt": f.ai_prompt,
+                "ai_seed": f.ai_seed,
+                "uploaded_at": f.uploaded_at,
+                "uploaded_by": uploaders.get(f.uploaded_by) if f.uploaded_by else None,
+                "processing": f.id in active,
+                "error": failed.get(f.id),
+                "urls": file_urls(f),
+            }
+        )
+    return out

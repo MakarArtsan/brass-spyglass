@@ -1,0 +1,100 @@
+"""Фоновая очередь в той же базе (таблица `job`). Статусы и прогресс пишутся здесь."""
+
+from typing import Any
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app import models
+from app.constants import JobStatus, JobType
+from app.db import utcnow
+
+MAX_ERROR_LEN = 500
+
+
+def enqueue(
+    db: Session, job_type: JobType, payload: dict[str, Any], created_by: int | None = None
+) -> models.Job:
+    job = models.Job(type=job_type.value, payload=payload, created_by=created_by)
+    db.add(job)
+    db.flush()
+    return job
+
+
+def claim_next(db: Session) -> models.Job | None:
+    """Берёт самую старую задачу из очереди и помечает её выполняемой."""
+    job = db.scalar(
+        select(models.Job)
+        .where(models.Job.status == JobStatus.QUEUED.value)
+        .order_by(models.Job.id)
+        .limit(1)
+    )
+    if job is None:
+        return None
+    job.status = JobStatus.RUNNING.value
+    job.started_at = utcnow()
+    job.progress = 0
+    db.flush()
+    return job
+
+
+def set_progress(db: Session, job_id: int, progress: float) -> None:
+    job = db.get(models.Job, job_id)
+    if job is not None:
+        job.progress = max(0.0, min(1.0, progress))
+
+
+def finish(db: Session, job_id: int) -> None:
+    job = db.get(models.Job, job_id)
+    if job is not None:
+        job.status = JobStatus.DONE.value
+        job.progress = 1.0
+        job.finished_at = utcnow()
+
+
+def fail(db: Session, job_id: int, error: str) -> None:
+    job = db.get(models.Job, job_id)
+    if job is not None:
+        job.status = JobStatus.FAILED.value
+        job.error = error[:MAX_ERROR_LEN]
+        job.finished_at = utcnow()
+
+
+def requeue_interrupted(db: Session) -> int:
+    """После перезапуска незавершённые задачи возвращаются в очередь (ТЗ)."""
+    rows = list(db.scalars(select(models.Job).where(models.Job.status == JobStatus.RUNNING.value)))
+    for job in rows:
+        job.status = JobStatus.QUEUED.value
+        job.progress = 0
+        job.started_at = None
+    return len(rows)
+
+
+def file_activity(db: Session, file_ids: list[int]) -> tuple[set[int], dict[int, str]]:
+    """Какие файлы ещё обрабатываются и у каких последняя задача упала (id → ошибка)."""
+    if not file_ids:
+        return set(), {}
+    wanted = set(file_ids)
+    active: set[int] = set()
+    failed: dict[int, str] = {}
+    rows = db.scalars(
+        select(models.Job)
+        .where(
+            models.Job.type.in_(
+                [JobType.PREVIEW.value, JobType.PROXY.value, JobType.WAVEFORM.value]
+            )
+        )
+        .order_by(models.Job.id)
+    )
+    for job in rows:
+        file_id = job.payload.get("file_id")
+        if file_id not in wanted:
+            continue
+        if job.status in (JobStatus.QUEUED.value, JobStatus.RUNNING.value):
+            active.add(file_id)
+            failed.pop(file_id, None)
+        elif job.status == JobStatus.FAILED.value:
+            failed[file_id] = job.error or "ошибка обработки"
+        elif job.status == JobStatus.DONE.value:
+            failed.pop(file_id, None)
+    return active, failed
