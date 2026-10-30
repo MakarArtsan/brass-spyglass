@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     session_days: int = 30
     cookie_secure: bool = True
     login_token_ttl_sec: int = 300
+    file_link_ttl_sec: int = 3600  # срок жизни подписанных ссылок на файлы
     membership_recheck_hours: int = 24
 
     @computed_field  # type: ignore[prop-decorator]

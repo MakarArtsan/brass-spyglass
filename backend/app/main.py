@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app import db as database
 from app.api import auth as auth_api
-from app.api import health, me
+from app.api import entities, health, me
 from app.auth.telegram import TelegramService
 from app.auth.tokens import LoginTokenStore
 from app.config import get_settings
@@ -74,6 +74,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router, prefix="/api")
     app.include_router(auth_api.router, prefix="/api")
     app.include_router(me.router, prefix="/api")
+    app.include_router(entities.router, prefix="/api")
 
     @app.api_route("/api/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
     async def _api_not_found(rest: str) -> JSONResponse:
