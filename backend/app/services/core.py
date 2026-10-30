@@ -83,6 +83,9 @@ ENTITIES: dict[str, EntitySpec] = {
             "drum_level",
             "meaning",
             "cut_notes",
+            "characters",
+            "key_assets",
+            "lines_en",
             "side",
             "final_file_id",
         },
@@ -97,6 +100,7 @@ ENTITIES: dict[str, EntitySpec] = {
             "description",
             "size",
             "camera",
+            "sound_note",
             "duration_sec",
             "tool",
             "stage",
@@ -117,7 +121,8 @@ ENTITIES: dict[str, EntitySpec] = {
     ),
     EntityType.SETUP_PAYOFF: EntitySpec(
         models.SetupPayoff,
-        WORK_FIELDS | {"motif", "setup_shot_ids", "payoff_shot_ids", "reader_takeaway", "risk"},
+        WORK_FIELDS
+        | {"number", "motif", "setup_shot_ids", "payoff_shot_ids", "reader_takeaway", "risk"},
     ),
     EntityType.SOUND_CUE: EntitySpec(
         models.SoundCue,

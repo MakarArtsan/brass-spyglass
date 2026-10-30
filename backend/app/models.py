@@ -43,6 +43,7 @@ from app.constants import (
     SoundType,
     Stage,
     Status,
+    TaskBlock,
     Tool,
     check_in,
 )
@@ -169,6 +170,9 @@ class Scene(WorkMixin, Base):
     drum_level: Mapped[int | None] = mapped_column(Integer, default=None)
     meaning: Mapped[str | None] = mapped_column(Text, default=None)
     cut_notes: Mapped[str | None] = mapped_column(Text, default=None)
+    characters: Mapped[str | None] = mapped_column(Text, default=None)
+    key_assets: Mapped[str | None] = mapped_column(Text, default=None)
+    lines_en: Mapped[str | None] = mapped_column(Text, default=None)  # реплики сцены (EN)
     side: Mapped[str | None] = mapped_column(String(8), default=None)
     final_file_id: Mapped[int | None] = mapped_column(ForeignKey("file.id"), default=None)
 
@@ -192,6 +196,7 @@ class Shot(WorkMixin, Base):
     description: Mapped[str | None] = mapped_column(Text, default=None)
     size: Mapped[str | None] = mapped_column(String(16), default=None)
     camera: Mapped[str | None] = mapped_column(String(300), default=None)
+    sound_note: Mapped[str | None] = mapped_column(Text, default=None)  # «Реплика / звук»
     duration_sec: Mapped[float] = mapped_column(Float, default=0)
     tool: Mapped[str | None] = mapped_column(String(16), default=None)
     stage: Mapped[str | None] = mapped_column(String(16), default=None)
@@ -245,10 +250,11 @@ class ShotAsset(Base):
 
 class SetupPayoff(WorkMixin, Base):
     __tablename__ = "setup_payoff"
-    __table_args__ = work_checks()
+    __table_args__ = (*work_checks(), _alive("uq_setup_payoff_number", "project_id", "number"))
 
     id: Mapped[int] = mapped_column(primary_key=True)
     project_id: Mapped[int] = mapped_column(ForeignKey("project.id"), index=True)
+    number: Mapped[int | None] = mapped_column(Integer, default=None)  # № в Excel
     motif: Mapped[str] = mapped_column(String(300))
     setup_shot_ids: Mapped[list[int]] = mapped_column(JSON, default=list)
     payoff_shot_ids: Mapped[list[int]] = mapped_column(JSON, default=list)
@@ -282,6 +288,7 @@ class Task(WorkMixin, Base):
     __tablename__ = "task"
     __table_args__ = (
         *work_checks(),
+        CheckConstraint(_check_nullable_in("block", TaskBlock), name="block"),
         CheckConstraint("(entity_type IS NULL) = (entity_id IS NULL)", name="entity_pair"),
         _alive("uq_task_code", "project_id", "code"),
         Index("ix_task_entity", "entity_type", "entity_id"),
@@ -290,7 +297,7 @@ class Task(WorkMixin, Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     project_id: Mapped[int] = mapped_column(ForeignKey("project.id"), index=True)
     code: Mapped[str] = mapped_column(String(16))  # T-01
-    block: Mapped[str | None] = mapped_column(String(200), default=None)
+    block: Mapped[str | None] = mapped_column(String(16), default=None)
     title: Mapped[str] = mapped_column(String(500))
     entity_type: Mapped[str | None] = mapped_column(String(16), default=None)
     entity_id: Mapped[int | None] = mapped_column(Integer, default=None)

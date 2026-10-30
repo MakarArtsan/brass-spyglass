@@ -17,7 +17,7 @@ from app.auth.tokens import LoginTokenStore
 from app.config import get_settings
 from app.migrate import upgrade_to_head
 from app.permissions import PermissionDenied
-from app.services import projects
+from app.services import projects, seed
 from app.services.core import ConflictError, NotFoundError, ValidationError
 
 log = logging.getLogger("app")
@@ -32,8 +32,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     database.init_engine()
     upgrade_to_head()
     with database.session_factory()() as db:
-        projects.ensure_default_project(db)
+        project = projects.ensure_default_project(db)
         db.commit()
+        try:
+            seed.seed_if_empty(db, project.id, settings.seed_path)
+            db.commit()
+        except Exception:  # сайт должен подняться и без стартовых данных
+            log.exception("не удалось загрузить стартовые данные из Excel")
+            db.rollback()
     if not settings.session_secret:
         log.warning("SESSION_SECRET не задан: сессии пропадут при перезапуске")
 

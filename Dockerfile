@@ -32,6 +32,7 @@ RUN pip install -r requirements.txt
 COPY backend/app ./app
 COPY backend/alembic ./alembic
 COPY backend/alembic.ini ./
+COPY backend/seed ./seed
 COPY --from=web /web/dist ./static
 
 EXPOSE 8000

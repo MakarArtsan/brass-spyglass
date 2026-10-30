@@ -5,3 +5,4 @@ alembic==1.20.1
 telethon==1.45.0
 itsdangerous==2.2.0
 pydantic-settings==2.16.2
+openpyxl==3.1.5

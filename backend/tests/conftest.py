@@ -19,6 +19,7 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("SESSION_SECRET", "test-secret")
     monkeypatch.setenv("COOKIE_SECURE", "false")
     monkeypatch.setenv("OWNER_TG_ID", str(OWNER_TG_ID))
+    monkeypatch.setenv("SEED_XLSX", "")  # автоимпорт Excel включают только тесты импорта
     from app.config import get_settings
 
     get_settings.cache_clear()
