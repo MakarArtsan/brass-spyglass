@@ -1,0 +1,83 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    background-color: rgb(var(--ink));
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-ink font-sans text-paper antialiased;
+    min-height: 100dvh;
+    overscroll-behavior-y: none;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply font-display font-semibold tracking-tight;
+  }
+  :focus-visible {
+    @apply outline outline-2 outline-offset-2 outline-brass;
+  }
+  ::selection {
+    background: rgb(var(--brass) / 0.35);
+  }
+  /* Тонкий скроллбар под цвет карты */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--line)) transparent;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply rounded-xl border border-line bg-chart;
+  }
+  .mono {
+    @apply font-mono tabular-nums;
+  }
+  /* Нижняя панель и листы учитывают «чёлку» и жестовую полосу */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  /* Линза: превью в круглой рамке-окуляре с латунным ободом */
+  .lens {
+    @apply relative inline-block shrink-0 overflow-hidden rounded-full;
+    box-shadow:
+      0 0 0 2px rgb(var(--brass)),
+      0 0 0 5px rgb(var(--ink)),
+      0 0 0 6px rgb(var(--brass) / 0.55),
+      inset 0 0 14px rgb(0 0 0 / 0.55);
+  }
+  .lens-img {
+    @apply h-full w-full object-cover transition-transform duration-base;
+  }
+  .lens-glass {
+    @apply pointer-events-none absolute inset-0 rounded-full opacity-0 transition-opacity duration-base;
+    background:
+      radial-gradient(circle at 32% 26%, rgb(var(--brass-light) / 0.35), transparent 38%),
+      radial-gradient(circle, transparent 52%, rgb(0 0 0 / 0.6) 100%);
+    mix-blend-mode: normal;
+  }
+  .lens[data-tube='true'] .lens-img {
+    filter: url(#lens-barrel) sepia(0.35) saturate(1.2) contrast(1.05);
+    transform: scale(1.14);
+  }
+  .lens[data-tube='true'] .lens-glass {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
