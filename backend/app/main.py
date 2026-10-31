@@ -1,5 +1,6 @@
 """Точка входа: один процесс отдаёт API, SSE и собранный React-фронтенд."""
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -12,9 +13,10 @@ from starlette.middleware.gzip import GZipMiddleware
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app import db as database
-from app import uploads
+from app import events, uploads
 from app.api import auth as auth_api
 from app.api import entities, health, me
+from app.api import events as events_api
 from app.api import files as files_api
 from app.auth.telegram import TelegramService
 from app.auth.tokens import LoginTokenStore
@@ -28,7 +30,13 @@ from app.worker import JobRunner
 log = logging.getLogger("app")
 
 # Эти пути gzip не трогаем: SSE нельзя буферизовать, а куски видео (Range) и zip уже сжаты.
-NO_GZIP_PREFIXES = ("/api/files/", "/api/uploads", "/api/auth/login-token", "/api/entities/")
+NO_GZIP_PREFIXES = (
+    "/api/files/",
+    "/api/uploads",
+    "/api/auth/login-token",
+    "/api/entities/",
+    "/api/events",
+)
 
 
 class SelectiveGZip:
@@ -75,6 +83,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if not settings.session_secret:
         log.warning("SESSION_SECRET не задан: сессии пропадут при перезапуске")
 
+    events.bus.bind(asyncio.get_running_loop())
     uploads.cleanup_stale(settings)
     app.state.upload_locks = {}
     app.state.jobs = JobRunner()
@@ -115,6 +124,7 @@ def create_app() -> FastAPI:
     app.include_router(me.router, prefix="/api")
     app.include_router(entities.router, prefix="/api")
     app.include_router(files_api.router, prefix="/api")
+    app.include_router(events_api.router, prefix="/api")
 
     @app.api_route("/api/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
     async def _api_not_found(rest: str) -> JSONResponse:
