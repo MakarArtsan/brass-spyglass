@@ -5,6 +5,8 @@ import { BottomNav } from '@/components/BottomNav'
 import { ContestBadge } from '@/components/ContestBadge'
 import { Header } from '@/components/Header'
 import { Sidebar } from '@/components/Sidebar'
+import { Toaster } from '@/components/Toast'
+import { UploadProvider } from '@/components/Uploads'
 import { useProject } from '@/hooks/useAuth'
 import type { Me } from '@/lib/api'
 
@@ -13,6 +15,7 @@ export function AppShell({ me }: { me: Me }) {
   const { data: project } = useProject()
   const location = useLocation()
   return (
+    <UploadProvider>
     <div className="min-h-dvh lg:flex">
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-brass focus:px-3 focus:py-2 focus:text-on-brass">
         К содержимому
@@ -38,6 +41,8 @@ export function AppShell({ me }: { me: Me }) {
         </footer>
       </div>
       <BottomNav user={me.user} abilities={me.abilities} />
+      <Toaster />
     </div>
+    </UploadProvider>
   )
 }

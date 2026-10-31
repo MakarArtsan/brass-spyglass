@@ -16,7 +16,9 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (!res.ok) {
     let detail = res.statusText
     try {
-      detail = (await res.json()).detail ?? detail
+      const body = await res.json()
+      // 422 от валидатора приходит списком объектов — человеку он ни о чём не говорит
+      detail = typeof body.detail === 'string' ? body.detail : 'Некорректные данные'
     } catch {
       /* тело не JSON */
     }

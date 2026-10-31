@@ -3,6 +3,8 @@ import { cn } from '@/lib/utils'
 
 interface Props {
   src?: string
+  /** Только украшение: эффект по наведению родителя (`group`), клик и фокус не перехватываем. */
+  decorative?: boolean
   alt: string
   /** Диаметр окуляра, px. */
   size?: number
@@ -17,7 +19,7 @@ interface Props {
  *  — касанием и стилусом: тапом, повторный тап выключает («только по наведению» на телефоне не бывает);
  *  — с клавиатуры: фокусом или Enter/Пробелом.
  */
-export function Lens({ src, alt, size = 96, className, children }: Props) {
+export function Lens({ src, alt, decorative, size = 96, className, children }: Props) {
   const [tube, setTube] = useState(false)
   const pointer = useRef<string>('')
 
@@ -28,6 +30,14 @@ export function Lens({ src, alt, size = 96, className, children }: Props) {
     }
   }
 
+  if (decorative) {
+    return (
+      <span aria-hidden className={cn('lens lens-decor', className)} style={{ width: size, height: size }}>
+        {src ? <img src={src} alt="" draggable={false} className="lens-img" /> : children}
+        <span className="lens-glass" aria-hidden />
+      </span>
+    )
+  }
   return (
     <span
       role="img"

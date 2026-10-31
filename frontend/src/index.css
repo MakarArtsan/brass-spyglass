@@ -71,6 +71,22 @@
   .lens[data-tube='true'] .lens-glass {
     opacity: 1;
   }
+  .group:hover .lens-decor .lens-img,
+  .group:focus-visible .lens-decor .lens-img {
+    filter: url(#lens-barrel) sepia(0.35) saturate(1.2) contrast(1.05);
+    transform: scale(1.14);
+  }
+  .group:hover .lens-decor .lens-glass,
+  .group:focus-visible .lens-decor .lens-glass {
+    opacity: 1;
+  }
+}
+
+/* Зона, на которую сейчас бросают файл с рабочего стола */
+[data-drop-active='true'] {
+  outline: 2px solid rgb(var(--brass));
+  outline-offset: -2px;
+  background-color: rgb(var(--brass) / 0.1);
 }
 
 @media (prefers-reduced-motion: reduce) {
