@@ -12,7 +12,7 @@ export function StatusChip({ status, className }: Props) {
   return (
     <span
       className={cn(
-        'inline-flex min-h-[28px] items-center gap-1.5 rounded-full border px-3 text-xs font-semibold',
+        'inline-flex min-h-[28px] items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-xs font-semibold',
         status === 'cut' && 'line-through',
         className,
       )}

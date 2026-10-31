@@ -100,13 +100,16 @@ const ShotRow = memo(function ShotRow({ perms, meta, patch, shot, selected, onSe
           {shot.code}
         </button>
       </td>
-      <td className="min-w-[240px]">
+      <td className="w-40 px-2">
+        <StatusPill status={shot.status} onChange={perms.canStatus ? (status: StatusKey) => patch(shot.id, { status }) : undefined} />
+      </td>
+      <td className="min-w-[220px]">
         <EditableText value={shot.description} readOnly={!editable} multiline ariaLabel={`${ru.shots.description} ${shot.code}`} onSave={(v) => save({ description: v })} />
       </td>
       <td className="min-w-[120px]">
         <EditableSelect value={shot.size} readOnly={!editable} ariaLabel={`${ru.shots.size} ${shot.code}`} onChange={(v) => save({ size: v })} options={opts(meta?.size, ru.size)} />
       </td>
-      <td className={'min-w-[150px]'}>
+      <td className={'min-w-[130px]'}>
         <EditableText value={shot.camera} readOnly={!editable} ariaLabel={`${ru.shots.camera} ${shot.code}`} onSave={(v) => save({ camera: v })} />
       </td>
       <td className="w-20">
@@ -128,9 +131,6 @@ const ShotRow = memo(function ShotRow({ perms, meta, patch, shot, selected, onSe
         <EditableSelect value={shot.stage} readOnly={!editable} ariaLabel={`${ru.shots.stage} ${shot.code}`} onChange={(v) => save({ stage: v })} options={opts(meta?.stage, ru.stage)} />
       </td>
       <td className={'mono w-14 text-center text-sm'}>{shot.takes_count || ru.common.dash}</td>
-      <td className="w-40 pr-2">
-        <StatusPill status={shot.status} onChange={perms.canStatus ? (status: StatusKey) => patch(shot.id, { status }) : undefined} />
-      </td>
       <td className="w-8">
         <button type="button" onClick={onOpen} aria-label={`${ru.shots.card}: ${shot.code}`} className="flex min-h-touch min-w-[32px] items-center justify-center text-fog hover:text-paper">
           <ChevronRight size={18} />
@@ -384,6 +384,7 @@ export default function Shots() {
                 </th>
                 <th className="w-14" />
                 <th className="px-1 py-2">{ru.shots.code}</th>
+                <th className="px-2">{ru.shots.status}</th>
                 <th className="px-2">{ru.shots.description}</th>
                 <th className="px-2">{ru.shots.size}</th>
                 <th className="px-2">{ru.shots.camera}</th>
@@ -392,7 +393,6 @@ export default function Shots() {
                 <th className="px-2">{ru.shots.tool}</th>
                 <th className="px-2">{ru.shots.stage}</th>
                 <th className="px-2 text-center">{ru.shots.takes}</th>
-                <th className="px-2">{ru.shots.status}</th>
                 <th className="w-8" />
               </tr>
             </thead>

@@ -29,10 +29,11 @@ function parseShots(text: string | null, shots: Shot[] | undefined): number[] | 
 }
 
 function ShotRefs({ refs, shots }: { refs: { id: number; code: string }[]; shots: Shot[] | undefined }) {
-  const previews = refs.map((r) => shots?.find((s) => s.id === r.id)).filter((s): s is Shot => !!s)
+  // Кружки с превью — только там, где превью уже есть; пустые кольца были бы шумом
+  const previews = refs.map((r) => shots?.find((s) => s.id === r.id)).filter((s): s is Shot => !!s?.preview)
   return (
     <div className="space-y-1.5">
-      <div className="flex -space-x-2">
+      <div className={previews.length ? 'flex -space-x-2' : 'hidden'}>
         {previews.slice(0, 4).map((s) => (
           <Link key={s.id} to={`/shots?shot=${s.id}`} className="group rounded-full outline-none focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-brass" aria-label={`${ru.shots.card}: ${s.code}`}>
             <Lens decorative size={34} src={s.preview?.url} alt={s.code}>
@@ -150,7 +151,7 @@ export default function Setups() {
                     <td className="min-w-[200px]">
                       <EditableText value={s.risk} multiline readOnly={!editable} ariaLabel={ru.setups.risk} onSave={(v) => save({ risk: v })} />
                     </td>
-                    <td className="px-2 py-3">{status(s)}</td>
+                    <td className="min-w-[150px] px-2 py-3">{status(s)}</td>
                   </tr>
                 )
               })}
