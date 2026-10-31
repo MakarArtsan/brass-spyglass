@@ -1,4 +1,4 @@
-import { api, expect, freshShot, signIn, test } from './fixtures'
+import { api, expect, freshShot, mountDashboardTiles, signIn, test } from './fixtures'
 
 test('дашборд показывает данные проекта из базы', async ({ page, asRole }) => {
   await asRole('owner')
@@ -17,13 +17,6 @@ interface TaskRef {
   code: string
   status: string
   due_date: string | null
-}
-
-/** Плитки под сгибом строятся при подходе к ним; Tab строит их сразу, это ровно то, что делает клавиатурный пользователь. */
-async function mountAllTiles(page: import('@playwright/test').Page) {
-  await expect(page.getByText(/\d+:\d{2} из \d+:\d{2}/).first()).toBeVisible()
-  await page.keyboard.press('Tab')
-  await expect(page.locator('section[aria-label]')).toHaveCount(0)
 }
 
 test.describe('виджеты дашборда', () => {
@@ -56,7 +49,7 @@ test.describe('виджеты дашборда', () => {
     await api(page, 'PATCH', `/tasks/${late.id}`, { due_date: '2020-01-01' })
 
     await page.goto('/')
-    await mountAllTiles(page)
+    await mountDashboardTiles(page)
     await page.getByRole('link', { name: /Просрочено/ }).click()
     await expect(page).toHaveURL(/\/tasks\?overdue=1/)
     await expect(page.getByRole('status').filter({ hasText: 'Просроченные' })).toBeVisible()
@@ -71,7 +64,7 @@ test.describe('виджеты дашборда', () => {
   test('«Ассеты без шотов» ведёт в список без CH-01, но с глашатаем CH-06', async ({ page, asRole }) => {
     await asRole('owner')
     await page.goto('/')
-    await mountAllTiles(page)
+    await mountDashboardTiles(page)
     await page.getByRole('link', { name: /Ассеты без шотов/ }).click()
     await expect(page).toHaveURL(/\/assets\?orphans=1/)
     await expect(page.getByText('CH-06', { exact: true }).first()).toBeVisible()
@@ -81,7 +74,7 @@ test.describe('виджеты дашборда', () => {
   test('гость видит числа, но не ленту действий', async ({ page, asRole }) => {
     await asRole('guest')
     await page.goto('/')
-    await mountAllTiles(page)
+    await mountDashboardTiles(page)
     await expect(page.getByText('Лента — часть журнала, гостю она не показывается')).toBeVisible()
   })
 
@@ -99,7 +92,7 @@ test.describe('виджеты дашборда', () => {
   test('в сгорании есть линия факта и честный прогноз при нулевом темпе', async ({ page, asRole }) => {
     await asRole('owner')
     await page.goto('/')
-    await mountAllTiles(page)
+    await mountDashboardTiles(page)
     await expect(page.getByText('идеальная линия до внутреннего срока')).toBeVisible()
     await expect(page.getByText(/осталось \d+:\d{2}/)).toBeVisible()
   })

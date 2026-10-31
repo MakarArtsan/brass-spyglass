@@ -158,3 +158,20 @@ def test_feed_labels_comments_and_shows_what_an_edit_changed(api):
     assert all(isinstance(pair, list) and len(pair) == 2 for pair in edit["diff"].values())
     assert (comment["entity_type"], comment["label"]) == ("comment", "комментарий")
     assert comment["diff"] is None
+
+
+def test_media_widget_warns_at_80_percent_and_flags_a_full_disk(api):
+    from app import db as database
+    from app import models, storage
+    from app.config import get_settings
+
+    used = storage.used_bytes(get_settings(), fresh=True)
+    assert used > 0  # база уже лежит на диске
+    for fraction, warn, full in ((0.5, False, False), (0.85, True, False), (1.5, True, True)):
+        with database.session_factory()() as db:
+            project = db.query(models.Project).one()
+            project.storage_limit_gb = used / fraction / 1024**3
+            db.commit()
+        got = _dash(api)["media"]["storage"]
+        assert (got["warn"], got["full"]) == (warn, full), (fraction, got)
+        assert abs(got["used_pct"] - 100 * fraction) < 3
