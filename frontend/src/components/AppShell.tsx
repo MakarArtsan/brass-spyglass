@@ -10,12 +10,14 @@ import { Toaster } from '@/components/Toast'
 import { UploadProvider } from '@/components/Uploads'
 import { useProject } from '@/hooks/useAuth'
 import type { Me } from '@/lib/api'
+import { useLiveUpdates } from '@/lib/live'
 import { ru } from '@/ru'
 
 /** ПК: левый сайдбар. Смартфон: нижняя панель. Одна и та же страница в двух раскладках. */
 export function AppShell({ me }: { me: Me }) {
   const { data: project } = useProject()
   const location = useLocation()
+  useLiveUpdates(true)
   return (
     <UploadProvider>
     <div className="min-h-dvh lg:flex">

@@ -46,7 +46,7 @@ const RELATED: Record<Resource, string[]> = {
   tasks: ['tasks'],
 }
 
-function invalidate(qc: QueryClient, resource: Resource): Promise<unknown> {
+export function invalidateResource(qc: QueryClient, resource: Resource): Promise<unknown> {
   return Promise.all([
     ...RELATED[resource].map((k) => qc.invalidateQueries({ queryKey: [k] })),
     qc.invalidateQueries({ queryKey: ['activity'] }),
@@ -156,7 +156,7 @@ export function useUpdate<T extends Item>(resource: Resource) {
     onSuccess: (server, { id }) => {
       qc.setQueryData<T[]>([resource], (list) => list?.map((i) => (i.id === id ? { ...i, ...server } : i)))
     },
-    onSettled: () => invalidate(qc, resource),
+    onSettled: () => invalidateResource(qc, resource),
   })
 }
 
@@ -164,7 +164,7 @@ export function useCreate<T extends Item>(resource: Resource) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (body: Record<string, unknown>) => api<T>(`/${resource}`, json(body)),
-    onSuccess: () => invalidate(qc, resource),
+    onSuccess: () => invalidateResource(qc, resource),
   })
 }
 
@@ -181,7 +181,7 @@ export function useDelete(resource: Resource) {
     onError: (_e, _id, ctx) => {
       if (ctx?.previous) qc.setQueryData([resource], ctx.previous)
     },
-    onSettled: () => invalidate(qc, resource),
+    onSettled: () => invalidateResource(qc, resource),
   })
 }
 
@@ -204,7 +204,7 @@ export function useBulkStatus(entity: keyof typeof ENTITY_RESOURCE) {
     onError: (_e, _v, ctx) => {
       if (ctx?.previous) qc.setQueryData([resource], ctx.previous)
     },
-    onSettled: () => invalidate(qc, resource),
+    onSettled: () => invalidateResource(qc, resource),
   })
 }
 
@@ -227,7 +227,7 @@ export function useReorder(entity: 'scene' | 'shot') {
     onError: (_e, _v, ctx) => {
       if (ctx?.previous) qc.setQueryData([resource], ctx.previous)
     },
-    onSettled: () => invalidate(qc, resource),
+    onSettled: () => invalidateResource(qc, resource),
   })
 }
 
