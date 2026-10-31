@@ -5,15 +5,21 @@
 входят в суммы (так же, как в Excel-трекере: «хронометраж по шотам без вырезанных»).
 """
 
+import dataclasses
+import json
+import math
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
+from datetime import UTC, date, datetime, time, timedelta, timezone
+from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app import models
-from app.constants import Status
+from app import models, storage
+from app.config import Settings
+from app.constants import FileKind, FileSource, Status
 
 CUT = Status.CUT.value
 DONE = Status.DONE.value
@@ -167,3 +173,623 @@ def consistency_checks(db: Session, project_id: int) -> list[Check]:
         Check("Сцены, где шоты расходятся с планом", not off, f"{len(off)}"),
         Check("Ассеты без шотов", True, ", ".join(orphans) or "нет"),
     ]
+
+
+# === Дашборд (этап 2) ==========================================================================
+# Определения сверены с листом «Дашборд» Excel-трекера: проценты — «готово / (всего − вырезано)»,
+# «готовые секунды» — длительность шотов в статусе «Готово», доля Seedance — по секундам, а не по
+# числу шотов. Числа считаются здесь и нигде больше: фронтенд только рисует.
+
+# Команда живёт по Москве (UTC+3, без перехода на лето): по ней считаются «сегодня» и границы суток.
+TEAM_TZ = timezone(timedelta(hours=3))
+LONG_SHOT_SEC = 15  # лимит одного клипа Seedance
+SEEDANCE = "seedance"
+HISTORY_WINDOW_DAYS = 7  # окно, по которому оценивается текущий темп
+
+
+def team_date(moment: datetime) -> date:
+    return moment.astimezone(TEAM_TZ).date()
+
+
+def end_of_day(day: date) -> datetime:
+    """Последний момент суток по Москве, в UTC: граница, по которой считается «на конец дня»."""
+    return datetime.combine(day + timedelta(days=1), time.min, tzinfo=TEAM_TZ).astimezone(UTC)
+
+
+@dataclass(frozen=True, slots=True)
+class Progress:
+    done: int
+    total: int  # без вырезанных
+    pct: float  # 0…100
+
+
+def progress(statuses: Iterable[str]) -> Progress:
+    """Готовность списка: готовые / (все − вырезанные), как в Excel."""
+    alive = [s for s in statuses if s != CUT]
+    done = sum(1 for s in alive if s == DONE)
+    return Progress(done, len(alive), round(100 * done / len(alive), 1) if alive else 0.0)
+
+
+@dataclass(frozen=True, slots=True)
+class ShotFull:
+    id: int
+    code: str
+    scene_id: int
+    duration_sec: float
+    status: str
+    tool: str | None
+    due_date: date | None
+
+
+def ready_seconds(shots: Iterable[ShotFull]) -> float:
+    return sum(s.duration_sec for s in shots if s.status == DONE)
+
+
+@dataclass(frozen=True, slots=True)
+class SeedanceShare:
+    seedance_sec: float
+    total_sec: float
+    pct: float
+    target_pct: float
+
+
+def seedance_share(shots: Iterable[ShotFull], target_pct: float = 70.0) -> SeedanceShare:
+    alive = [s for s in shots if s.status != CUT]
+    total = sum(s.duration_sec for s in alive)
+    seedance = sum(s.duration_sec for s in alive if s.tool == SEEDANCE)
+    return SeedanceShare(
+        seedance, total, round(100 * seedance / total, 1) if total else 0.0, target_pct
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class Runtime:
+    shots_sec: float
+    plan_sec: float
+    min_sec: float
+    max_sec: float
+    in_zone: bool
+
+
+def runtime(shots_sec: float, plan_sec: float, min_sec: float, max_sec: float) -> Runtime:
+    return Runtime(shots_sec, plan_sec, min_sec, max_sec, min_sec <= shots_sec <= max_sec)
+
+
+@dataclass(frozen=True, slots=True)
+class Dated:
+    """Что угодно с дедлайном: сцена, шот, ассет, задача, сетап, звук."""
+
+    entity_type: str
+    id: int
+    status: str
+    due_date: date | None
+
+
+def overdue(items: Iterable[Dated], today: date) -> list[Dated]:
+    """Просрочено: срок раньше сегодняшнего дня, а статус не «Готово» и не «Вырезано»."""
+    return [
+        i
+        for i in items
+        if i.due_date is not None and i.due_date < today and i.status not in (DONE, CUT)
+    ]
+
+
+def long_shots(shots: Iterable[ShotFull]) -> list[ShotFull]:
+    return [s for s in shots if s.status != CUT and s.duration_sec > LONG_SHOT_SEC]
+
+
+# --- активность ----------------------------------------------------------------------------------
+
+UPLOAD, STATUS, COMMENT, OTHER = "upload", "status", "comment", "other"
+
+
+@dataclass(frozen=True, slots=True)
+class ActivityRow:
+    at: datetime
+    actor_id: int | None
+    kind: str  # UPLOAD / STATUS / COMMENT / OTHER
+    closed: bool = False  # статус сменён на «Готово»
+
+
+def heatmap(rows: Iterable[ActivityRow], first: date, today: date) -> list[tuple[date, int]]:
+    """Число действий по дням за весь проект; дни без действий тоже есть (нулём)."""
+    counts: dict[date, int] = defaultdict(int)
+    for row in rows:
+        counts[team_date(row.at)] += 1
+    span = (today - first).days
+    return [
+        (first + timedelta(days=i), counts.get(first + timedelta(days=i), 0))
+        for i in range(span + 1)
+    ]
+
+
+@dataclass(frozen=True, slots=True)
+class DayBar:
+    day: date
+    uploads: int
+    statuses: int
+    comments: int
+    by_user: dict[int, int]
+
+
+def daily_bars(rows: Iterable[ActivityRow], today: date, days: int = 14) -> list[DayBar]:
+    """Столбики за последние `days` суток: загрузки, смены статусов, комментарии, по участникам."""
+    window = [today - timedelta(days=days - 1 - i) for i in range(days)]
+    stats: dict[date, dict[str, int]] = {d: defaultdict(int) for d in window}
+    by_user: dict[date, dict[int, int]] = {d: defaultdict(int) for d in window}
+    for row in rows:
+        day = team_date(row.at)
+        if day not in stats or row.kind == OTHER:
+            continue
+        stats[day][row.kind] += 1
+        if row.actor_id is not None:
+            by_user[day][row.actor_id] += 1
+    return [
+        DayBar(d, stats[d][UPLOAD], stats[d][STATUS], stats[d][COMMENT], dict(by_user[d]))
+        for d in window
+    ]
+
+
+@dataclass(frozen=True, slots=True)
+class Contribution:
+    user_id: int
+    uploads: int
+    closed: int
+
+
+def contribution(rows: Iterable[ActivityRow], today: date, days: int = 7) -> list[Contribution]:
+    """Кто сколько загрузил и закрыл за неделю; по убыванию вклада."""
+    since = today - timedelta(days=days - 1)
+    uploads: dict[int, int] = defaultdict(int)
+    closed: dict[int, int] = defaultdict(int)
+    for row in rows:
+        if row.actor_id is None or team_date(row.at) < since:
+            continue
+        if row.kind == UPLOAD:
+            uploads[row.actor_id] += 1
+        if row.closed:
+            closed[row.actor_id] += 1
+    ids = set(uploads) | set(closed)
+    out = [Contribution(i, uploads[i], closed[i]) for i in ids]
+    return sorted(out, key=lambda c: (-(c.uploads + c.closed), c.user_id))
+
+
+# --- сгорание ------------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class ShotState:
+    duration: float
+    status: str
+    alive: bool  # не в корзине
+
+
+@dataclass(frozen=True, slots=True)
+class ShotEvent:
+    """Запись журнала о шоте. `status`/`duration` — пары (было, стало), если поле менялось."""
+
+    id: int
+    at: datetime
+    shot_id: int
+    action: str
+    status: tuple[str, str] | None = None
+    duration: tuple[float, float] | None = None
+
+
+def history_at(
+    now_state: dict[int, ShotState],
+    events: Sequence[ShotEvent],
+    day_ends: Sequence[datetime],
+) -> list[tuple[float, float]]:
+    """(готовые сек, всего сек) на конец каждого дня из `day_ends` (по возрастанию).
+
+    Журнал откатывается назад от нынешнего состояния: базовая точка не нужна, импорт Excel пишет в
+    журнал одну сводную строку, а не статус каждого шота. Откат: смена статуса и длительности
+    возвращает «было»; создание шота — его ещё не было; удаление — он ещё был; восстановление —
+    он ещё лежал в корзине.
+    """
+    state = dict(now_state)
+    ordered = sorted(events, key=lambda e: (e.at, e.id), reverse=True)
+    pointer = 0
+    out: list[tuple[float, float]] = []
+    for boundary in reversed(day_ends):
+        while pointer < len(ordered) and ordered[pointer].at > boundary:
+            _undo(state, ordered[pointer])
+            pointer += 1
+        alive = [s for s in state.values() if s.alive and s.status != CUT]
+        out.append(
+            (sum(s.duration for s in alive if s.status == DONE), sum(s.duration for s in alive))
+        )
+    out.reverse()
+    return out
+
+
+def _undo(state: dict[int, ShotState], event: ShotEvent) -> None:
+    current = state.get(event.shot_id)
+    if event.action == "create":
+        if current is not None:
+            state[event.shot_id] = ShotState(current.duration, current.status, False)
+        return
+    if current is None:
+        return
+    if event.action == "delete":
+        state[event.shot_id] = ShotState(current.duration, current.status, True)
+        return
+    if event.action == "restore":
+        state[event.shot_id] = ShotState(current.duration, current.status, False)
+        return
+    status = event.status[0] if event.status else current.status
+    duration = event.duration[0] if event.duration else current.duration
+    state[event.shot_id] = ShotState(duration, status, current.alive)
+
+
+@dataclass(frozen=True, slots=True)
+class BurndownPoint:
+    day: date
+    ideal: float
+    actual: float | None  # None у будущих дней
+
+
+@dataclass(frozen=True, slots=True)
+class Burndown:
+    points: list[BurndownPoint]
+    total_sec: float
+    remaining_sec: float
+    pace_sec_per_day: float
+    forecast: date | None  # когда закончим при текущем темпе; None, если оценить нечем
+    deadline: date
+    finishes_in_time: bool | None
+
+
+def burndown(
+    history: Sequence[tuple[date, float, float]],
+    deadline: date,
+    today: date,
+) -> Burndown:
+    """Сгорание: оставшиеся секунды до готовности против идеальной линии до `deadline`.
+
+    `history` — (день, готово сек, всего сек) на конец каждого дня от старта проекта до сегодня.
+    Темп — готовые секунды в сутки за последние `HISTORY_WINDOW_DAYS` суток (меньше, если проект
+    моложе); без прогресса прогноза нет.
+    """
+    start = history[0][0]
+    total_start = history[0][2]
+    days = max((max(deadline, today) - start).days, 0)
+    by_day = {d: (ready, total) for d, ready, total in history}
+    span = (deadline - start).days
+    points: list[BurndownPoint] = []
+    for i in range(days + 1):
+        day = start + timedelta(days=i)
+        ideal = total_start * max(0.0, (deadline - day).days / span) if span > 0 else 0.0
+        actual = None
+        if day in by_day:
+            ready, total = by_day[day]
+            actual = total - ready
+        points.append(
+            BurndownPoint(day, round(ideal, 1), None if actual is None else round(actual, 1))
+        )
+
+    ready_now, total_now = by_day[today] if today in by_day else history[-1][1:]
+    remaining = total_now - ready_now
+    window = min(HISTORY_WINDOW_DAYS, (today - start).days)
+    pace = 0.0
+    if window > 0:
+        base_day = today - timedelta(days=window)
+        pace = max(0.0, (ready_now - by_day.get(base_day, history[0][1:])[0]) / window)
+    forecast: date | None = None
+    if remaining <= 0:
+        forecast = today
+    elif pace > 0:
+        forecast = today + timedelta(days=math.ceil(remaining / pace))
+    return Burndown(
+        points=points,
+        total_sec=round(total_start, 1),
+        remaining_sec=round(remaining, 1),
+        pace_sec_per_day=round(pace, 2),
+        forecast=forecast,
+        deadline=deadline,
+        finishes_in_time=None if forecast is None else forecast <= deadline,
+    )
+
+
+# --- обёртки над БД для дашборда -----------------------------------------------------------------
+
+
+NOISE_ACTIONS = ("login", "access_revoked", "import")  # не «работа команды»: в активность не идут
+DASHBOARD_ENTITIES = (
+    ("scene", models.Scene),
+    ("shot", models.Shot),
+    ("asset", models.Asset),
+    ("setup_payoff", models.SetupPayoff),
+    ("sound_cue", models.SoundCue),
+    ("task", models.Task),
+)
+
+
+def load_shots_full(db: Session, project_id: int) -> list[ShotFull]:
+    rows = db.execute(
+        select(
+            models.Shot.id,
+            models.Shot.code,
+            models.Shot.scene_id,
+            models.Shot.duration_sec,
+            models.Shot.status,
+            models.Shot.tool,
+            models.Shot.due_date,
+        ).where(models.Shot.project_id == project_id, models.Shot.deleted_at.is_(None))
+    )
+    return [ShotFull(*row) for row in rows]
+
+
+def load_dated(db: Session, project_id: int) -> list[Dated]:
+    items: list[Dated] = []
+    for entity_type, model in DASHBOARD_ENTITIES:
+        rows = db.execute(
+            select(model.id, model.status, model.due_date).where(
+                model.project_id == project_id,  # type: ignore[attr-defined]
+                model.deleted_at.is_(None),  # type: ignore[attr-defined]
+            )
+        )
+        items.extend(Dated(entity_type, *row) for row in rows)
+    return items
+
+
+def _json_pair(raw: Any) -> tuple[Any, Any] | None:
+    """`json_extract` отдаёт пару «было/стало» текстом `["a","b"]`; одиночное значение — не пара."""
+    if not isinstance(raw, str):
+        return None
+    try:
+        value = json.loads(raw)
+    except ValueError:
+        return None
+    return (value[0], value[1]) if isinstance(value, list) and len(value) == 2 else None
+
+
+def load_activity_rows(db: Session, project_id: int) -> list[ActivityRow]:
+    status = func.json_extract(models.Activity.diff, "$.status")
+    rows = db.execute(
+        select(
+            models.Activity.at,
+            models.Activity.actor_id,
+            models.Activity.action,
+            models.Activity.entity_type,
+            status,
+        )
+        .where(
+            (models.Activity.project_id == project_id) | models.Activity.project_id.is_(None),
+            models.Activity.action.not_in(NOISE_ACTIONS),
+        )
+        .order_by(models.Activity.id)
+    )
+    out: list[ActivityRow] = []
+    for at, actor_id, action, entity_type, raw_status in rows:
+        pair = _json_pair(raw_status) if action in ("status", "update") else None
+        if entity_type == "file" and action == "create":
+            kind = UPLOAD
+        elif entity_type == "comment" and action == "create":
+            kind = COMMENT
+        elif pair is not None:
+            kind = STATUS
+        else:
+            kind = OTHER
+        out.append(ActivityRow(at, actor_id, kind, closed=pair is not None and pair[1] == DONE))
+    return out
+
+
+def load_shot_history_inputs(
+    db: Session, project_id: int
+) -> tuple[dict[int, ShotState], list[ShotEvent]]:
+    now_state = {
+        row[0]: ShotState(row[1], row[2], row[3] is None)
+        for row in db.execute(
+            select(
+                models.Shot.id,
+                models.Shot.duration_sec,
+                models.Shot.status,
+                models.Shot.deleted_at,
+            ).where(models.Shot.project_id == project_id)
+        )
+    }
+    status = func.json_extract(models.Activity.diff, "$.status")
+    duration = func.json_extract(models.Activity.diff, "$.duration_sec")
+    rows = db.execute(
+        select(
+            models.Activity.id,
+            models.Activity.at,
+            models.Activity.entity_id,
+            models.Activity.action,
+            status,
+            duration,
+        ).where(
+            models.Activity.entity_type == "shot",
+            models.Activity.entity_id.is_not(None),
+            models.Activity.action.in_(("create", "status", "update", "delete", "restore")),
+        )
+    )
+    events: list[ShotEvent] = []
+    for event_id, at, shot_id, action, raw_status, raw_duration in rows:
+        changed = action in ("status", "update")
+        events.append(
+            ShotEvent(
+                event_id,
+                at,
+                shot_id,
+                action,
+                status=_json_pair(raw_status) if changed else None,
+                duration=_json_pair(raw_duration) if changed else None,
+            )
+        )
+    return now_state, events
+
+
+def _scene_rows(db: Session, project_id: int) -> list[models.Scene]:
+    return list(
+        db.scalars(
+            select(models.Scene)
+            .where(models.Scene.project_id == project_id, models.Scene.deleted_at.is_(None))
+            .order_by(models.Scene.order, models.Scene.id)
+        )
+    )
+
+
+def _media_summary(db: Session, project_id: int) -> dict[str, Any]:
+    rows = db.execute(
+        select(models.File.kind, models.File.source, func.count())
+        .where(models.File.project_id == project_id, models.File.deleted_at.is_(None))
+        .group_by(models.File.kind, models.File.source)
+    )
+    by_kind = {kind.value: 0 for kind in FileKind}
+    from_telegram = 0
+    for kind, source, count in rows:
+        by_kind[kind] += count
+        if source == FileSource.TELEGRAM.value:
+            from_telegram += count
+    return {"total": sum(by_kind.values()), "by_kind": by_kind, "from_telegram": from_telegram}
+
+
+def dashboard_data(
+    db: Session,
+    project: models.Project,
+    settings: Settings,
+    now: datetime,
+    user_id: int,
+) -> dict[str, Any]:
+    """Все числа дашборда за один проход. Фронтенд ничего не считает, только рисует."""
+    pid = project.id
+    today = team_date(now)
+    scene_rows = _scene_rows(db, pid)
+    scenes = [SceneIn(s.id, s.order, s.planned_sec, s.status) for s in scene_rows]
+    shots = load_shot_inputs(db, pid)
+    full = load_shots_full(db, pid)
+    stats = scene_stats(scenes, shots)
+    plan = plan_total_sec(scenes)
+    shots_sec = shots_total_sec(shots)
+    ready = ready_seconds(full)
+    dated = load_dated(db, pid)
+
+    def statuses(entity_type: str) -> list[str]:
+        return [i.status for i in dated if i.entity_type == entity_type]
+
+    def prog(entity_type: str) -> dict[str, Any]:
+        p = progress(statuses(entity_type))
+        return {"done": p.done, "total": p.total, "pct": p.pct}
+
+    seed = seedance_share(full)
+    run = runtime(shots_sec, plan, project.target_min_sec, project.target_max_sec)
+    late = overdue(dated, today)
+    longs = long_shots(full)
+    orphans = assets_without_shots(db, pid)
+    alive_scenes = [s for s in scene_rows if s.status != CUT]
+    no_final = [s for s in alive_scenes if s.final_file_id is None]
+
+    activity = load_activity_rows(db, pid)
+    first_activity = min((team_date(a.at) for a in activity), default=today)
+    start = min(team_date(project.created_at), first_activity, today)
+    bars = daily_bars(activity, today)
+    contrib = contribution(activity, today)
+
+    now_state, events = load_shot_history_inputs(db, pid)
+    span = [start + timedelta(days=i) for i in range((today - start).days + 1)]
+    hist = history_at(now_state, events, [end_of_day(d) for d in span])
+    burn = burndown(
+        [(d, ready_d, total_d) for d, (ready_d, total_d) in zip(span, hist, strict=True)],
+        team_date(project.deadline_internal),
+        today,
+    )
+
+    tasks_now = list(
+        db.scalars(
+            select(models.Task)
+            .where(
+                models.Task.project_id == pid,
+                models.Task.deleted_at.is_(None),
+                models.Task.assignee_id == user_id,
+                models.Task.status.not_in((DONE, CUT)),
+            )
+            .order_by(models.Task.due_date.is_(None), models.Task.due_date, models.Task.id)
+            .limit(8)
+        )
+    )
+
+    return {
+        "today": today.isoformat(),
+        "readiness": {
+            "ready_sec": ready,
+            "shots_sec": shots_sec,
+            "plan_sec": plan,
+            "pct": round(100 * ready / shots_sec, 1) if shots_sec else 0.0,
+            "shots": prog("shot"),
+            "assets": prog("asset"),
+            "tasks": prog("task"),
+        },
+        "runtime": dataclasses.asdict(run),
+        "seedance": dataclasses.asdict(seed),
+        "media": _media_summary(db, pid)
+        | {"storage": dataclasses.asdict(storage.usage(settings, project.storage_limit_gb))},
+        "activity": {
+            "heatmap": [{"d": d.isoformat(), "n": n} for d, n in heatmap(activity, start, today)],
+            "bars": [
+                {
+                    "d": b.day.isoformat(),
+                    "uploads": b.uploads,
+                    "statuses": b.statuses,
+                    "comments": b.comments,
+                    "by_user": b.by_user,
+                }
+                for b in bars
+            ],
+        },
+        "burndown": {
+            "points": [
+                {"d": p.day.isoformat(), "ideal": p.ideal, "actual": p.actual} for p in burn.points
+            ],
+            "total_sec": burn.total_sec,
+            "remaining_sec": burn.remaining_sec,
+            "pace_sec_per_day": burn.pace_sec_per_day,
+            "forecast": burn.forecast.isoformat() if burn.forecast else None,
+            "deadline": burn.deadline.isoformat(),
+            "finishes_in_time": burn.finishes_in_time,
+        },
+        "contribution": [dataclasses.asdict(c) for c in contrib],
+        "film_strip": [
+            {
+                "scene_id": s.id,
+                "number": s.number,
+                "title": s.title,
+                "planned_sec": s.planned_sec,
+                "ready_pct": stats[s.id].ready_pct,
+                "status": s.status,
+            }
+            for s in alive_scenes
+        ],
+        "alerts": {
+            "overdue": {
+                "total": len(late),
+                "by_type": {
+                    t: sum(1 for i in late if i.entity_type == t) for t, _ in DASHBOARD_ENTITIES
+                },
+            },
+            "long_shots": [
+                {"id": s.id, "code": s.code, "duration_sec": s.duration_sec} for s in longs
+            ],
+            "orphan_assets": [{"id": a.id, "code": a.code, "name": a.name} for a in orphans],
+            "scenes_without_final": [
+                {"id": s.id, "number": s.number, "title": s.title} for s in no_final
+            ],
+        },
+        "drum": [
+            {"scene_id": s.id, "number": s.number, "title": s.title, "level": s.drum_level}
+            for s in alive_scenes
+        ],
+        "my_tasks": [
+            {
+                "id": t.id,
+                "code": t.code,
+                "title": t.title,
+                "status": t.status,
+                "due_date": t.due_date.isoformat() if t.due_date else None,
+                "overdue": t.due_date is not None and t.due_date < today,
+            }
+            for t in tasks_now
+        ],
+    }
