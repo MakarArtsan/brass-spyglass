@@ -133,7 +133,10 @@ async function mountTiles(page) {
     await page.keyboard.press('Tab')
     await page.waitForTimeout(250)
   }
-  await page.evaluate(() => window.scrollTo(0, 0))
+  await page.evaluate(() => {
+    window.scrollTo(0, 0)
+    document.activeElement?.blur() // иначе в кадре остаётся «К содержимому» от последнего Tab
+  })
   await page.waitForTimeout(600)
 }
 
@@ -208,7 +211,18 @@ await shoot('desktop-lens-tile', desktop, {
   url: `/shots?shot=${demo.firstShot}`,
   act: (p) => p.getByRole('button', { name: /Открыть: Референс пролива/ }).first().hover(),
 })
-await shoot('phone-bottom-sheet-more', phone, { url: '/', act: (p) => p.getByRole('button', { name: 'Ещё' }).click() }, { mobile: true })
+await shoot('phone-bottom-sheet-more', phone, {
+  url: '/',
+  act: async (p) => {
+    await p.getByRole('button', { name: 'Ещё' }).click()
+    await p.getByRole('dialog').waitFor() // лист подгружается отдельным чанком
+    // и выезжает анимацией: ждём, пока он окажется на экране
+    await p.waitForFunction(() => {
+      const d = document.querySelector('[role=dialog]')
+      return !!d && getComputedStyle(d).opacity === '1' && d.getBoundingClientRect().top < window.innerHeight - 100
+    })
+  },
+}, { mobile: true })
 
 await browser.close()
 console.log('готово →', out)
