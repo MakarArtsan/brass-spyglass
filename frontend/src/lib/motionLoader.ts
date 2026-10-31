@@ -9,7 +9,13 @@ const AFTER_LOAD_MS = 1500
 export function loadMotionFeatures(): Promise<FeatureBundle> {
   return new Promise((resolve) => {
     const start = () => {
-      const go = () => void import('@/lib/motionFeatures').then((module) => resolve(module.default))
+      const go = () => {
+        void import('@/lib/motionFeatures').then((module) => resolve(module.default))
+        // Ленивые куски с анимациями грузим заранее: первое нажатие «Ещё», тост и перетаскивание не ждут сеть.
+        void import('@/components/MoreSheetHost')
+        void import('@/components/ToastList')
+        void import('@/components/DropOverlay')
+      }
       window.setTimeout(() => {
         if ('requestIdleCallback' in window) window.requestIdleCallback(go, { timeout: 3000 })
         else go()

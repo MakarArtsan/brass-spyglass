@@ -63,10 +63,6 @@ class UploadInit(BaseModel):
 @router.post("/uploads", status_code=status.HTTP_201_CREATED)
 def init_upload(body: UploadInit, db: DbDep, actor: ActorDep) -> dict[str, Any]:
     permissions.require(permissions.can_upload(actor), "Гость не загружает файлы")
-    try:
-        storage.ensure_room(get_settings(), _project_limit_gb(db), body.size)
-    except storage.NoRoom as exc:
-        raise HTTPException(status.HTTP_507_INSUFFICIENT_STORAGE, str(exc)) from exc
     if files.kind_for(body.name) is None:
         raise HTTPException(
             status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
@@ -76,6 +72,12 @@ def init_upload(body: UploadInit, db: DbDep, actor: ActorDep) -> dict[str, Any]:
         upload_id = uploads.create(get_settings(), actor.id, body.name, body.size, body.mime)
     except uploads.UploadError as exc:
         _raise(exc)
+    # Формат (415) и размер файла (413) проверены выше; последним — не переполнит ли он диск (507).
+    try:
+        storage.ensure_room(get_settings(), _project_limit_gb(db), body.size)
+    except storage.NoRoom as exc:
+        uploads.discard(get_settings(), upload_id)
+        raise HTTPException(status.HTTP_507_INSUFFICIENT_STORAGE, str(exc)) from exc
     chunk = min(get_settings().upload_chunk_mb * 1024 * 1024, uploads.CHUNK_MAX_BYTES)
     return {"id": upload_id, "offset": 0, "size": body.size, "chunk_size": chunk}
 

@@ -1,7 +1,8 @@
 import { AlertTriangle, CheckCircle2, Loader2, X } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { usePerms } from '@/hooks/usePerms'
-import { useTgJobs, type TgJob } from '@/lib/telegram'
+import { onJobEvent } from '@/lib/live'
+import { tgJobsHint, useTgJobs, type TgJob } from '@/lib/telegram'
 import { ru } from '@/ru'
 
 const DONE_VISIBLE_MS = 6000
@@ -46,8 +47,11 @@ function Row({ job, onDismiss }: { job: TgJob; onDismiss: () => void }) {
 /** Прогресс импорта из Telegram в углу экрана: окно «Добавить из Telegram» можно закрыть (ТЗ). */
 export function TgJobs() {
   const perms = usePerms()
-  const { data } = useTgJobs()
+  const mayBeImporting = useSyncExternalStore(tgJobsHint.subscribe, tgJobsHint.get)
+  const { data } = useTgJobs(perms.canUpload && mayBeImporting)
   const [dismissed, setDismissed] = useState<Set<number>>(new Set())
+  // Импорт мог начаться в другой вкладке или до перезагрузки: прогресс задачи приходит по SSE.
+  useEffect(() => onJobEvent((event) => event.job_type === 'tg_import' && tgJobsHint.raise()), [])
   if (!perms.canUpload) return null
   const jobs = (data ?? []).filter((j) => !dismissed.has(j.id))
   if (jobs.length === 0) return null

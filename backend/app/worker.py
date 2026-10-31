@@ -240,7 +240,7 @@ class JobRunner:
             try:
                 # Загрузка из Telegram идёт по одной: вторая не должна занять слот ffmpeg впустую.
                 skip = (JobType.TG_IMPORT.value,) if tg_busy() else ()
-                job_id = await asyncio.to_thread(claim_next_id, skip)
+                job_id = await asyncio.to_thread(claim_next_id, *([skip] if skip else []))
             except Exception:
                 self._slots.release()
                 log.exception("не удалось взять задачу из очереди, повтор через секунду")

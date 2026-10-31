@@ -84,7 +84,7 @@ function Tile({
   const Icon = ICONS[item.kind]
   const label = item.caption ?? title(item) // то же, что видно под плиткой
   return (
-    <div className={cn('relative flex w-[112px] flex-col gap-1', picked && 'rounded-xl bg-brass/10')}>
+    <div className={cn('relative flex w-[112px] flex-col gap-1 self-start', picked && 'rounded-xl bg-brass/10')}>
       <button
         type="button"
         onClick={onToggle}

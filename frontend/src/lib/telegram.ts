@@ -111,7 +111,10 @@ export function useTgImport(entityType: string, entityId: number) {
         method: 'POST',
         body: JSON.stringify({ media_ids: mediaIds, entity_type: entityType, entity_id: entityId, purpose }),
       }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: tgKeys.jobs }),
+    onSuccess: () => {
+      tgJobsHint.raise()
+      void qc.invalidateQueries({ queryKey: tgKeys.jobs })
+    },
   })
 }
 
@@ -132,9 +135,28 @@ export const useTgView = (mediaId: number | null) =>
     gcTime: 0,
   })
 
-export const useTgJobs = () =>
+/**
+ * Запрос «моих импортов» не нужен, пока ничего не импортируется: без него каждая страница делала бы лишний
+ * запрос на старте. Включается, когда импорт начат здесь или пришло событие задачи по SSE.
+ */
+const hint = { raised: false, listeners: new Set<() => void>() }
+export const tgJobsHint = {
+  subscribe: (listener: () => void) => {
+    hint.listeners.add(listener)
+    return () => hint.listeners.delete(listener)
+  },
+  get: () => hint.raised,
+  raise: () => {
+    if (hint.raised) return
+    hint.raised = true
+    hint.listeners.forEach((l) => l())
+  },
+}
+
+export const useTgJobs = (enabled = true) =>
   useQuery({
     queryKey: tgKeys.jobs,
+    enabled,
     queryFn: () => api<TgJob[]>('/tg/jobs'),
     refetchInterval: (q) => (q.state.data?.some((j) => j.status === 'queued' || j.status === 'running') ? 2000 : false),
   })
