@@ -4,9 +4,9 @@ import sqlite3
 from collections.abc import Iterator
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, Engine, create_engine, event
+from sqlalchemy import ColumnElement, DateTime, Engine, create_engine, event, func
 from sqlalchemy.engine import Dialect
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import InstrumentedAttribute, Session, sessionmaker
 from sqlalchemy.types import TypeDecorator
 
 from app.config import Settings, get_settings
@@ -33,6 +33,18 @@ def utcnow() -> datetime:
     return datetime.now(UTC)
 
 
+def _fold(value: object) -> object:
+    return value.casefold() if isinstance(value, str) else value
+
+
+def ci_contains(
+    column: ColumnElement[str] | InstrumentedAttribute[str | None], text: str
+) -> ColumnElement[bool]:
+    """Подстрока без учёта регистра, и для кириллицы тоже; `%` и `_` в тексте — обычные символы."""
+    escaped = text.casefold().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return func.unicode_fold(column).like(f"%{escaped}%", escape="\\")
+
+
 def _configure_sqlite(dbapi_conn: sqlite3.Connection, _record: object) -> None:
     cur = dbapi_conn.cursor()
     cur.execute("PRAGMA journal_mode=WAL")
@@ -40,6 +52,8 @@ def _configure_sqlite(dbapi_conn: sqlite3.Connection, _record: object) -> None:
     cur.execute("PRAGMA foreign_keys=ON")
     cur.execute("PRAGMA busy_timeout=5000")
     cur.close()
+    # lower() и LIKE в SQLite знают регистр только латиницы: «дозорный» не находил «Дозорный».
+    dbapi_conn.create_function("unicode_fold", 1, _fold, deterministic=True)
 
 
 def make_engine(url: str) -> Engine:

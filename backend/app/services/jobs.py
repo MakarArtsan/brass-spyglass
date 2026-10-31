@@ -1,5 +1,6 @@
 """Фоновая очередь в той же базе (таблица `job`). Статусы и прогресс пишутся здесь."""
 
+from collections.abc import Collection
 from typing import Any
 
 from sqlalchemy import select
@@ -40,14 +41,12 @@ def enqueue(
     return job
 
 
-def claim_next(db: Session) -> models.Job | None:
-    """Берёт самую старую задачу из очереди и помечает её выполняемой."""
-    job = db.scalar(
-        select(models.Job)
-        .where(models.Job.status == JobStatus.QUEUED.value)
-        .order_by(models.Job.id)
-        .limit(1)
-    )
+def claim_next(db: Session, skip: Collection[str] = ()) -> models.Job | None:
+    """Берёт самую старую задачу из очереди и помечает её выполняемой. Типы из `skip` не берутся."""
+    stmt = select(models.Job).where(models.Job.status == JobStatus.QUEUED.value)
+    if skip:
+        stmt = stmt.where(models.Job.type.not_in(list(skip)))
+    job = db.scalar(stmt.order_by(models.Job.id).limit(1))
     if job is None:
         return None
     job.status = JobStatus.RUNNING.value

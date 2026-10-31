@@ -1,3 +1,5 @@
+import { Images } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { Avatar } from '@/components/Avatar'
 import { useUsers } from '@/hooks/useAuth'
 import { ru } from '@/ru'
@@ -20,6 +22,10 @@ export default function Team() {
               <div className="mt-1 text-xs text-fog">
                 {ru.team.lastSeen}: {u.last_seen_at ? fmt.format(new Date(u.last_seen_at)) : ru.team.never}
               </div>
+              <Link to={`/media?author=${u.id}`} className="mt-1 inline-flex min-h-[44px] items-center gap-1.5 text-xs text-brass hover:text-brass-light focus-visible:outline focus-visible:outline-2 focus-visible:outline-brass">
+                <Images size={14} aria-hidden />
+                {ru.team.files}
+              </Link>
             </div>
             <span className="rounded-full border border-brass/40 px-2.5 py-0.5 text-xs font-semibold text-brass">{ru.roles[u.role]}</span>
           </li>

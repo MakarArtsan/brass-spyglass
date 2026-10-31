@@ -18,12 +18,13 @@ from sqlalchemy import exists, func, select
 from sqlalchemy.orm import Session
 from starlette.background import BackgroundTask
 
-from app import metrics, models, permissions, signing, uploads
+from app import metrics, models, permissions, signing, storage, uploads
 from app.api import serialize
 from app.api.entities import ActorDep, DbDep, UserDep, input_model
 from app.auth import session
 from app.config import get_settings
 from app.constants import EntityType, FileKind, FileSource, Purpose
+from app.db import ci_contains
 from app.services import core, files, links, projects
 
 router = APIRouter(dependencies=[Depends(session.same_origin)])
@@ -37,6 +38,11 @@ def _project_id(db: Session) -> int:
     if project is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Проект не создан")
     return project.id
+
+
+def _project_limit_gb(db: Session) -> float:
+    project = projects.get_project(db)
+    return project.storage_limit_gb if project else 5.0
 
 
 def _raise(exc: uploads.UploadError) -> None:
@@ -55,8 +61,12 @@ class UploadInit(BaseModel):
 
 
 @router.post("/uploads", status_code=status.HTTP_201_CREATED)
-def init_upload(body: UploadInit, actor: ActorDep) -> dict[str, Any]:
+def init_upload(body: UploadInit, db: DbDep, actor: ActorDep) -> dict[str, Any]:
     permissions.require(permissions.can_upload(actor), "Гость не загружает файлы")
+    try:
+        storage.ensure_room(get_settings(), _project_limit_gb(db), body.size)
+    except storage.NoRoom as exc:
+        raise HTTPException(status.HTTP_507_INSUFFICIENT_STORAGE, str(exc)) from exc
     if files.kind_for(body.name) is None:
         raise HTTPException(
             status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
@@ -248,15 +258,6 @@ def add_link(body: LinkIn, request: Request, db: DbDep, actor: ActorDep) -> dict
     return {"file": serialize.files_out(db, [file])[0], "created": created}
 
 
-ESCAPE = "\\"
-
-
-def _like(text: str) -> str:
-    """Подстрока для LIKE: служебные символы пользователя не должны работать как шаблон."""
-    escaped = text.replace(ESCAPE, ESCAPE * 2).replace("%", ESCAPE + "%").replace("_", ESCAPE + "_")
-    return f"%{escaped}%"
-
-
 @router.get("/library")
 def library(
     db: DbDep,
@@ -286,12 +287,12 @@ def library(
     if unattached:
         stmt = stmt.where(~exists().where(models.Attachment.file_id == models.File.id))
     if q and q.strip():
-        pattern = _like(q.strip())
+        needle = q.strip()
         stmt = stmt.where(
-            models.File.original_name.ilike(pattern, escape=ESCAPE)
-            | models.File.link_title.ilike(pattern, escape=ESCAPE)
-            | models.File.url.ilike(pattern, escape=ESCAPE)
-            | models.File.tg_author.ilike(pattern, escape=ESCAPE)
+            ci_contains(models.File.original_name, needle)
+            | ci_contains(models.File.link_title, needle)
+            | ci_contains(models.File.url, needle)
+            | ci_contains(models.File.tg_author, needle)
         )
     total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
     if before_id is not None:

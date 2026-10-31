@@ -229,6 +229,8 @@ def test_search_by_name_link_and_telegram_author_treats_wildcards_literally(fill
     assert names(library(api, q="director")) == {"director-free.png"}
     assert names(library(api, q="EXAMPLE.com")) == {"https://example.com/ref"}
     assert names(library(api, q="Лена")) == {"from-chat.jpg"}
+    assert names(library(api, q="лена")) == {"from-chat.jpg"}  # регистр кириллицы не важен
+    assert names(library(api, q="ЛЕНА")) == {"from-chat.jpg"}
     assert library(api, q="%")["total"] == 0  # % — обычный символ, а не «любая строка»
     assert library(api, q="_")["total"] == 0
 

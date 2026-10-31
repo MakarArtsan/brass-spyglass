@@ -58,6 +58,8 @@ def store_upload(
     size_bytes: int,
     sha256: str,
     files_dir: Path,
+    source: FileSource = FileSource.UPLOAD,
+    extra: dict[str, Any] | None = None,
 ) -> models.File:
     """Создаёт запись файла (автор и время — от сервера, из сессии), переносит загруженное на
     постоянный диск и ставит задачу на превью. Оригинал дальше не меняется."""
@@ -70,11 +72,12 @@ def store_upload(
         EntityType.FILE,
         {
             "kind": kind.value,
-            "source": FileSource.UPLOAD.value,
+            "source": source.value,
             "original_name": original_name,
             "mime": mime,
             "size_bytes": size_bytes,
             "sha256": sha256,
+            **(extra or {}),
         },
         project_id=project_id,
     )

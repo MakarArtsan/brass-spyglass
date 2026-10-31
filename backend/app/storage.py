@@ -82,3 +82,23 @@ def usage(settings: Settings, limit_gb: float, *, fresh: bool = False) -> Usage:
         warn=fraction >= WARN_FRACTION,
         full=fraction >= 1.0,
     )
+
+
+class NoRoom(Exception):  # noqa: N818
+    """Файл не помещается в лимит диска проекта. Текст показывается человеку."""
+
+
+def ensure_room(settings: Settings, limit_gb: float, extra_bytes: int) -> None:
+    """Отказывает, если после добавления `extra_bytes` диск переполнится.
+
+    Диск делят файлы, превью, прокси и база, поэтому считаем занятое по факту, а не по размерам в
+    таблице. База лежит на том же диске: заполненный диск остановил бы не только загрузки.
+    """
+    current = usage(settings, limit_gb, fresh=True)
+    if current.used_bytes + max(0, extra_bytes) > current.limit_bytes:
+        free = max(0, current.limit_bytes - current.used_bytes)
+        raise NoRoom(
+            f"На диске не хватает места: свободно {free / GIB:.1f} ГБ из "
+            f"{current.limit_bytes / GIB:.1f} ГБ, а нужно {extra_bytes / GIB:.2f} ГБ. "
+            "Удалите ненужные файлы или очистите корзину."
+        )
