@@ -10,7 +10,9 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from '@/App'
 import { ThemeProvider } from '@/hooks/useTheme'
-import { ApiError } from '@/lib/api'
+import { ApiError, api, type Me } from '@/lib/api'
+import { meKey } from '@/hooks/useAuth'
+import { warmUpRoute } from '@/lib/queries'
 import { toast } from '@/lib/toast'
 import { ru } from '@/ru'
 
@@ -21,6 +23,11 @@ const queryClient = new QueryClient({
     onError: (error) => toast(error instanceof ApiError ? error.message : ru.common.saveFailed),
   }),
 })
+
+if (!location.pathname.startsWith('/login')) {
+  void queryClient.prefetchQuery({ queryKey: meKey, queryFn: () => api<Me>('/me'), staleTime: 60_000 })
+  warmUpRoute(queryClient, location.pathname)
+}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -1,5 +1,6 @@
 import * as Dropdown from '@radix-ui/react-dropdown-menu'
 import { Check } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { STATUS_ORDER } from '@/brand'
 import { StatusChip } from '@/components/StatusChip'
 import { cn } from '@/lib/utils'
@@ -15,16 +16,41 @@ interface Props {
 
 /** Статус цветом из Excel-трекера; по клику открывается список из шести статусов. */
 export function StatusPill({ status, onChange, className }: Props) {
+  // Меню Radix тяжёлое, а чипов в списке десятки: до первого клика это простая кнопка.
+  const [armed, setArmed] = useState(false)
+  const plain = useRef<HTMLButtonElement>(null)
+  const refocus = useRef(false)
+  useEffect(() => {
+    if (!armed && refocus.current) {
+      refocus.current = false
+      plain.current?.focus() // после закрытия меню фокус остаётся на чипе
+    }
+  }, [armed])
+
   if (!onChange) return <StatusChip status={status} className={className} />
+  const label = `${ru.shots.status}: ${ru.status[status]}`
+  const triggerClass = cn(
+    'inline-flex rounded-full transition-opacity duration-fast hover:opacity-80 max-lg:min-h-touch max-lg:items-center',
+    className,
+  )
+  if (!armed) {
+    return (
+      <button ref={plain} type="button" aria-label={label} aria-haspopup="menu" onClick={() => setArmed(true)} className={triggerClass}>
+        <StatusChip status={status} />
+      </button>
+    )
+  }
   return (
-    <Dropdown.Root>
-      <Dropdown.Trigger
-        aria-label={`${ru.shots.status}: ${ru.status[status]}`}
-        className={cn(
-          'inline-flex rounded-full transition-opacity duration-fast hover:opacity-80 max-lg:min-h-touch max-lg:items-center',
-          className,
-        )}
-      >
+    <Dropdown.Root
+      defaultOpen
+      onOpenChange={(open) => {
+        if (!open) {
+          refocus.current = true
+          setArmed(false)
+        }
+      }}
+    >
+      <Dropdown.Trigger aria-label={label} className={triggerClass}>
         <StatusChip status={status} />
       </Dropdown.Trigger>
       <Dropdown.Portal>

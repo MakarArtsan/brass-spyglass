@@ -53,7 +53,7 @@ function invalidate(qc: QueryClient, resource: Resource): Promise<unknown> {
   ])
 }
 
-const fetchers = {
+export const fetchers = {
   scenes: () => api<Scene[]>('/scenes'),
   shots: () => api<Shot[]>('/shots'),
   assets: () => api<Asset[]>('/assets'),
@@ -309,5 +309,32 @@ export function useFileMutations(type: string, id: number) {
         api(`/files/${fileId}`, { method: 'PATCH', body: JSON.stringify(patch) }),
       onSuccess: refresh,
     }),
+  }
+}
+
+/**
+ * Ускоряет первый показ: пока React поднимается, уже летят данные и код нужной страницы.
+ * Без этого цепочка «скрипт → /api/me → код страницы → данные» на 4G даёт 3+ секунды.
+ */
+export function warmUpRoute(qc: QueryClient, path: string): void {
+  if (path.startsWith('/login')) return
+  const prefetch = (key: readonly unknown[], fn: () => Promise<unknown>) => void qc.prefetchQuery({ queryKey: key, queryFn: fn, staleTime: 60_000 })
+  const meta = () => prefetch(keys.meta, () => api<Meta>('/meta'))
+  if (path.startsWith('/shots')) {
+    void import('@/pages/Shots')
+    prefetch(keys.list('shots'), fetchers.shots)
+    prefetch(keys.list('scenes'), fetchers.scenes)
+    meta()
+  } else if (path.startsWith('/scenes')) {
+    void import('@/pages/Scenes')
+    prefetch(keys.list('scenes'), fetchers.scenes)
+  } else if (path.startsWith('/assets')) {
+    void import('@/pages/Assets')
+    prefetch(keys.list('assets'), fetchers.assets)
+    meta()
+  } else if (path.startsWith('/tasks')) {
+    void import('@/pages/Tasks')
+    prefetch(keys.list('tasks'), fetchers.tasks)
+    meta()
   }
 }

@@ -8,6 +8,8 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.gzip import GZipMiddleware
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app import db as database
 from app import uploads
@@ -24,6 +26,33 @@ from app.services.core import ConflictError, NotFoundError, ValidationError
 from app.worker import JobRunner
 
 log = logging.getLogger("app")
+
+# Эти пути gzip не трогаем: SSE нельзя буферизовать, а куски видео (Range) и zip уже сжаты.
+NO_GZIP_PREFIXES = ("/api/files/", "/api/uploads", "/api/auth/login-token", "/api/entities/")
+
+
+class SelectiveGZip:
+    """Сжимает JSON и статику (на медленной сети это пол-секунды), но не файлы и не SSE."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+        self.gzip = GZipMiddleware(app, minimum_size=1000)
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http" and not scope["path"].startswith(NO_GZIP_PREFIXES):
+            await self.gzip(scope, receive, send)
+        else:
+            await self.app(scope, receive, send)
+
+
+class ImmutableStaticFiles(StaticFiles):
+    """Файлы /assets имеют хэш в имени и не меняются — браузер кэширует их на год."""
+
+    def file_response(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return response
+
 
 DEFAULT_STATIC = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 
@@ -80,6 +109,7 @@ def create_app() -> FastAPI:
     async def _conflict(_: Request, exc: ConflictError) -> JSONResponse:
         return JSONResponse({"detail": str(exc)}, status_code=409)
 
+    app.add_middleware(SelectiveGZip)
     app.include_router(health.router, prefix="/api")
     app.include_router(auth_api.router, prefix="/api")
     app.include_router(me.router, prefix="/api")
@@ -101,7 +131,7 @@ def _mount_frontend(app: FastAPI) -> None:
     if not index.is_file():
         log.warning("фронтенд не собран (%s): отдаём только API", static)
         return
-    app.mount("/assets", StaticFiles(directory=static / "assets"), name="assets")
+    app.mount("/assets", ImmutableStaticFiles(directory=static / "assets"), name="assets")
 
     @app.get("/{path:path}", include_in_schema=False)
     def _spa(path: str) -> FileResponse:  # sync: проверка путей идёт в пуле потоков

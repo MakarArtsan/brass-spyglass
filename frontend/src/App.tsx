@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppShell } from '@/components/AppShell'
 import { LensFilters } from '@/components/LensFilters'
@@ -56,7 +56,6 @@ function Protected() {
     )
   }
   return (
-    <Suspense fallback={<div role="status" className="p-8 text-fog">{ru.app.loading}</div>}>
     <Routes>
       <Route element={<AppShell me={me} />}>
         {NAV.map((item) => (
@@ -71,7 +70,6 @@ function Protected() {
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
-    </Suspense>
   )
 }
 

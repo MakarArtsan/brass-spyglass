@@ -42,7 +42,7 @@ function SceneCard({ scene, dragEnabled }: { scene: Scene; dragEnabled: boolean 
           <GripVertical size={18} />
         </button>
       )}
-      <Link to={`/scenes/${scene.id}`} className="min-w-0 flex-1 space-y-2 outline-none focus-visible:ring-2 focus-visible:ring-brass" aria-label={`${ru.scenes.scene(scene.number)}: ${scene.title}`}>
+      <Link to={`/scenes/${scene.id}`} className="min-w-0 flex-1 space-y-2 outline-none focus-visible:ring-2 focus-visible:ring-brass">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <span className="mono text-2xl font-semibold text-brass">{String(scene.number).padStart(2, '0')}</span>
           <span className={cn('font-display text-2xl leading-tight', cut && 'line-through')}>{scene.title}</span>

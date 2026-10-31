@@ -169,6 +169,21 @@ def test_upload_survives_an_app_restart(env, monkeypatch, media):
         assert done.status_code == 201 and done.json()["file"]["uploaded_by"]["id"] == user.id
 
 
+def test_chunk_size_comes_from_settings(api, monkeypatch):
+    from app.config import get_settings
+
+    assert (
+        api.post("/api/uploads", json={"name": "a.png", "size": 10}).json()["chunk_size"]
+        == 8 * 1024 * 1024
+    )
+    monkeypatch.setenv("UPLOAD_CHUNK_MB", "1")
+    get_settings.cache_clear()
+    assert (
+        api.post("/api/uploads", json={"name": "b.png", "size": 10}).json()["chunk_size"]
+        == 1024 * 1024
+    )
+
+
 def test_upload_validation(api, media):
     assert api.post("/api/uploads", json={"name": "virus.exe", "size": 10}).status_code == 415
     assert (
@@ -188,7 +203,7 @@ def test_upload_validation(api, media):
         ).status_code
         == 404
     )
-    assert api.get("/api/uploads/../../etc/passwd").status_code in (404, 422)
+    assert api.get("/api/uploads/..%2f..%2fetc%2fpasswd").status_code == 404  # обход каталога
     big = api.post("/api/uploads", json={"name": "b.png", "size": 20 * 1024 * 1024}).json()["id"]
     chunk = api.patch(
         f"/api/uploads/{big}", content=b"0" * (16 * 1024 * 1024 + 1), headers={"Upload-Offset": "0"}
@@ -468,3 +483,38 @@ def test_deleted_file_disappears_from_the_card_and_takes_counter(api, media):
     assert (
         api.get("/api/files", params={"entity_type": "shot", "entity_id": shot["id"]}).json() == []
     )
+
+
+async def test_runner_survives_a_failure_while_claiming_a_job(db, monkeypatch):
+    """Разовая ошибка базы не должна навсегда останавливать обработку файлов."""
+    import asyncio
+
+    from app import worker
+    from app.constants import JobType
+    from app.services import jobs
+
+    real = worker.claim_next_id
+    calls = {"n": 0}
+
+    def flaky() -> int | None:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("database is locked")
+        return real()
+
+    monkeypatch.setattr(worker, "claim_next_id", flaky)
+    monkeypatch.setattr(worker, "process_job", lambda job_id: None)
+    job = jobs.enqueue(db, JobType.PREVIEW, {"file_id": 999999})
+    db.commit()
+
+    runner = worker.JobRunner()
+    await runner.start()
+    try:
+        for _ in range(60):
+            await asyncio.sleep(0.1)
+            db.expire_all()
+            if db.get(__import__("app.models", fromlist=["Job"]).Job, job.id).status == "running":
+                break
+        assert calls["n"] >= 2  # после ошибки цикл жив и взял задачу
+    finally:
+        await runner.stop()

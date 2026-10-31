@@ -13,13 +13,16 @@ OWNER_TG_ID = 1001
 def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Чистый /data и настройки без Telegram на каждый тест."""
     for key in list(os.environ):
-        if key.startswith(("TG_", "FRONTEND_")):
+        if key.startswith(("TG_", "FRONTEND_", "UPLOAD_")):
             monkeypatch.delenv(key)
     monkeypatch.setenv("DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("SESSION_SECRET", "test-secret")
     monkeypatch.setenv("COOKIE_SECURE", "false")
     monkeypatch.setenv("OWNER_TG_ID", str(OWNER_TG_ID))
     monkeypatch.setenv("SEED_XLSX", "")  # автоимпорт Excel включают только тесты импорта
+    monkeypatch.setenv(
+        "FRONTEND_DIR", str(tmp_path / "no-frontend")
+    )  # тесты не зависят от сборки React
     from app.config import get_settings
 
     get_settings.cache_clear()

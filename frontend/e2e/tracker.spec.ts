@@ -39,8 +39,8 @@ test.describe('шот-лист', () => {
   test('цвета статусов — из токенов Excel-трекера', async ({ page }) => {
     await freshShot(page, '01.05')
     await page.goto('/shots')
-    const chip = shotRow(page, '01.05').getByRole('button', { name: /Статус: Не начато/ }).locator('span').first()
-    await expect(chip).toHaveCSS('color', 'rgb(124, 133, 151)') // серый «Не начато»
+    const dot = shotRow(page, '01.05').getByRole('button', { name: /Статус: Не начато/ }).locator('span > span').first()
+    await expect(dot).toHaveCSS('background-color', 'rgb(124, 133, 151)') // серый «Не начато» из токена статуса
   })
 
   test('описание правится прямо в таблице', async ({ page, isMobile }) => {
@@ -122,7 +122,7 @@ test.describe('сцены, ассеты, сетапы, звук, задачи', 
     await page.goto('/scenes')
     await expect(page.locator('[data-scene]')).toHaveCount(12)
     await expect(page.getByText('Итого по плану 6:00 · по шотам 6:00')).toBeVisible()
-    await page.getByRole('link', { name: /Сцена 2: Блеф как политика/ }).click()
+    await page.getByRole('link', { name: /Блеф как политика/ }).click()
     await expect(page.getByRole('heading', { name: 'Блеф как политика', level: 1 })).toBeVisible()
     await expect(page.getByText('0:25–0:55').first()).toBeVisible()
     await expect(page.getByRole('link', { name: /Карточка шота: 02\.01/ })).toBeVisible()

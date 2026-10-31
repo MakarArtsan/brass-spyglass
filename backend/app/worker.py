@@ -175,9 +175,17 @@ class JobRunner:
         await asyncio.gather(*self._running, return_exceptions=True)
 
     async def _serve(self) -> None:
+        """Главный цикл. Разовая ошибка (например, база занята) не должна его убивать:
+        иначе превью и прокси молча перестанут обрабатываться до перезапуска."""
         while True:
             await self._slots.acquire()
-            job_id = await asyncio.to_thread(claim_next_id)
+            try:
+                job_id = await asyncio.to_thread(claim_next_id)
+            except Exception:
+                self._slots.release()
+                log.exception("не удалось взять задачу из очереди, повтор через секунду")
+                await asyncio.sleep(1)
+                continue
             if job_id is None:
                 self._slots.release()
                 self._wakeup.clear()

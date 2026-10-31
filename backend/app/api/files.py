@@ -65,7 +65,8 @@ def init_upload(body: UploadInit, actor: ActorDep) -> dict[str, Any]:
         upload_id = uploads.create(get_settings(), actor.id, body.name, body.size, body.mime)
     except uploads.UploadError as exc:
         _raise(exc)
-    return {"id": upload_id, "offset": 0, "size": body.size, "chunk_size": uploads.CHUNK_BYTES}
+    chunk = min(get_settings().upload_chunk_mb * 1024 * 1024, uploads.CHUNK_MAX_BYTES)
+    return {"id": upload_id, "offset": 0, "size": body.size, "chunk_size": chunk}
 
 
 @router.get("/uploads/{upload_id}")

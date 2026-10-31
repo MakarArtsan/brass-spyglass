@@ -11,7 +11,7 @@ import {
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { ChevronRight, GripVertical, Plus, Search } from 'lucide-react'
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, memo, useCallback, useMemo, useState } from 'react'
 import { FilterChips } from '@/components/Chips'
 import { CardPanel } from '@/components/CardPanel'
 import { EditableSelect, EditableText } from '@/components/Editable'
@@ -28,6 +28,7 @@ import { usePanelParam } from '@/hooks/usePanelParam'
 import { usePerms } from '@/hooks/usePerms'
 import { num, timecode } from '@/lib/format'
 import { useBulkStatus, useCreate, useMeta, useReorder, useScenes, useShots, useUpdate } from '@/lib/queries'
+import type { Meta } from '@/lib/types'
 import { toast } from '@/lib/toast'
 import type { Scene, Shot, StatusKey } from '@/lib/types'
 import { cn } from '@/lib/utils'
@@ -36,7 +37,13 @@ import { ru } from '@/ru'
 const opts = (values: string[] | undefined, labels: Record<string, string>) =>
   (values ?? []).map((v) => ({ value: v, label: labels[v] ?? v }))
 
+type Perms = ReturnType<typeof usePerms>
+type Patch = (id: number, patch: Record<string, unknown>) => void
+
 interface RowProps {
+  perms: Perms
+  meta: Meta | undefined
+  patch: Patch
   shot: Shot
   selected: boolean
   onSelect: () => void
@@ -46,13 +53,10 @@ interface RowProps {
 }
 
 /** Строка таблицы шот-листа: инлайн-правка ячеек, статус в один клик, перетаскивание за ручку. */
-function ShotRow({ shot, selected, onSelect, onOpen, dragEnabled, active }: RowProps) {
-  const perms = usePerms()
-  const { data: meta } = useMeta()
-  const update = useUpdate<Shot>('shots')
+const ShotRow = memo(function ShotRow({ perms, meta, patch, shot, selected, onSelect, onOpen, dragEnabled, active }: RowProps) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: shot.id, disabled: !dragEnabled })
   const editable = perms.canEdit(shot)
-  const save = (patch: Record<string, unknown>) => update.mutate({ id: shot.id, patch })
+  const save = (changes: Record<string, unknown>) => patch(shot.id, changes)
 
   return (
     <tr
@@ -125,7 +129,7 @@ function ShotRow({ shot, selected, onSelect, onOpen, dragEnabled, active }: RowP
       </td>
       <td className={'mono w-14 text-center text-sm'}>{shot.takes_count || ru.common.dash}</td>
       <td className="w-40 pr-2">
-        <StatusPill status={shot.status} onChange={perms.canStatus ? (status: StatusKey) => update.mutate({ id: shot.id, patch: { status } }) : undefined} />
+        <StatusPill status={shot.status} onChange={perms.canStatus ? (status: StatusKey) => patch(shot.id, { status }) : undefined} />
       </td>
       <td className="w-8">
         <button type="button" onClick={onOpen} aria-label={`${ru.shots.card}: ${shot.code}`} className="flex min-h-touch min-w-[32px] items-center justify-center text-fog hover:text-paper">
@@ -134,12 +138,10 @@ function ShotRow({ shot, selected, onSelect, onOpen, dragEnabled, active }: RowP
       </td>
     </tr>
   )
-}
+})
 
 /** Карточка шота на телефоне: тап по чипу меняет статус, тап по карточке открывает лист. */
-function ShotTile({ shot, onOpen, dragEnabled }: { shot: Shot; onOpen: () => void; dragEnabled: boolean }) {
-  const perms = usePerms()
-  const update = useUpdate<Shot>('shots')
+const ShotTile = memo(function ShotTile({ perms, patch, shot, onOpen, dragEnabled }: { perms: Perms; patch: Patch; shot: Shot; onOpen: () => void; dragEnabled: boolean }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: shot.id, disabled: !dragEnabled })
   return (
     <li
@@ -147,14 +149,14 @@ function ShotTile({ shot, onOpen, dragEnabled }: { shot: Shot; onOpen: () => voi
       style={{ transform: CSS.Transform.toString(transform), transition }}
       {...(perms.canUpload ? dropZone({ entityType: 'shot', entityId: shot.id, purpose: 'reference' }) : {})}
       data-shot={shot.code}
-      className={cn('flex items-start gap-2 rounded-xl border border-line bg-chart p-2', isDragging && 'relative z-10 shadow-xl', shot.status === 'cut' && 'opacity-60')}
+      className={cn('defer-render flex items-start gap-2 rounded-xl border border-line bg-chart p-2', isDragging && 'relative z-10 shadow-xl', shot.status === 'cut' && 'opacity-60')}
     >
       {dragEnabled && (
         <button type="button" ref={setActivatorNodeRef} aria-label={`${ru.common.drag}: ${shot.code}`} {...attributes} {...listeners} className="flex min-h-touch min-w-touch touch-none items-center justify-center text-fog">
           <GripVertical size={18} />
         </button>
       )}
-      <button type="button" onClick={onOpen} className="group flex min-w-0 flex-1 items-start gap-3 text-left" aria-label={`${ru.shots.card}: ${shot.code}`}>
+      <button type="button" onClick={onOpen} className="group flex min-w-0 flex-1 items-start gap-3 text-left">
         <Lens decorative size={52} src={shot.preview?.url} alt={shot.code}>
           <span className="block h-full w-full bg-ink" />
         </Lens>
@@ -166,10 +168,10 @@ function ShotTile({ shot, onOpen, dragEnabled }: { shot: Shot; onOpen: () => voi
           </span>
         </span>
       </button>
-      <StatusPill status={shot.status} onChange={perms.canStatus ? (status: StatusKey) => update.mutate({ id: shot.id, patch: { status } }) : undefined} />
+      <StatusPill status={shot.status} onChange={perms.canStatus ? (status: StatusKey) => patch(shot.id, { status }) : undefined} />
     </li>
   )
-}
+})
 
 function NewShot({ scenes, onDone }: { scenes: Scene[]; onDone: () => void }) {
   const create = useCreate<Shot>('shots')
@@ -224,6 +226,9 @@ export default function Shots() {
   const [openId, setOpenId] = usePanelParam('shot')
   const reorder = useReorder('shot')
   const bulk = useBulkStatus('shot')
+  const { data: meta } = useMeta()
+  const update = useUpdate<Shot>('shots')
+  const patch = useCallback((id: number, changes: Record<string, unknown>) => update.mutate({ id, patch: changes }), [update])
 
   const [query, setQuery] = useState('')
   const [statuses, setStatuses] = useState<StatusKey[]>([])
@@ -408,6 +413,9 @@ export default function Shots() {
                       {group.shots.map((shot) => (
                         <ShotRow
                           key={shot.id}
+                          perms={perms}
+                          meta={meta}
+                          patch={patch}
                           shot={shot}
                           selected={selected.has(shot.id)}
                           onSelect={() => toggle(shot.id)}
@@ -436,7 +444,7 @@ export default function Shots() {
                 <SortableContext items={group.shots.map((s) => s.id)} strategy={verticalListSortingStrategy}>
                   <ul className="space-y-2">
                     {group.shots.map((shot) => (
-                      <ShotTile key={shot.id} shot={shot} onOpen={() => setOpenId(shot.id)} dragEnabled={dragEnabled} />
+                      <ShotTile key={shot.id} perms={perms} patch={patch} shot={shot} onOpen={() => setOpenId(shot.id)} dragEnabled={dragEnabled} />
                     ))}
                   </ul>
                 </SortableContext>

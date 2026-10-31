@@ -34,6 +34,11 @@
   .panel {
     @apply rounded-xl border border-line bg-chart;
   }
+  /* Длинные списки: браузер не раскладывает и не рисует плитки за пределами экрана */
+  .defer-render {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 96px;
+  }
   .mono {
     @apply font-mono tabular-nums;
   }

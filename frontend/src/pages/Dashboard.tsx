@@ -31,6 +31,7 @@ export default function Dashboard() {
         <p className="mt-2 max-w-2xl text-fog">{ru.dashboard.stageNote}</p>
       </div>
 
+      {!project && <div aria-hidden className="min-h-[640px]" />}
       {project && (
         <>
           <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">

@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     cookie_secure: bool = True
     login_token_ttl_sec: int = 300
     file_link_ttl_sec: int = 3600  # срок жизни подписанных ссылок на файлы
+    # Размер куска при загрузке. Если вход Amvera режет тело запроса (413), поставьте 1.
+    upload_chunk_mb: int = 8
     membership_recheck_hours: int = 24
 
     @computed_field  # type: ignore[prop-decorator]

@@ -12,7 +12,7 @@ export function Header({ project }: { project?: Project }) {
     <header className="pt-safe relative overflow-hidden border-b border-line bg-ink">
       <StraitMap className="absolute inset-0 h-full w-full" />
       <div className="absolute inset-0 bg-gradient-to-r from-ink/90 via-ink/50 to-transparent" aria-hidden />
-      <div className="relative flex items-center justify-between gap-4 px-4 py-4 lg:px-8 lg:py-6">
+      <div className="relative flex min-h-[111px] items-center justify-between gap-4 px-4 py-4 lg:min-h-[146px] lg:px-8 lg:py-6">
         <div className="min-w-0">
           <p className="mono truncate text-[10px] uppercase tracking-[0.22em] text-brass lg:text-[11px]">{FILM.titleEn}</p>
           <p className="font-display text-xl font-semibold leading-tight lg:text-4xl">

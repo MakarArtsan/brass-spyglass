@@ -17,7 +17,6 @@ export function StatusChip({ status, className }: Props) {
         className,
       )}
       style={{
-        color: `rgb(var(--status-${status}))`,
         borderColor: `rgb(var(--status-${status}) / 0.5)`,
         backgroundColor: `rgb(var(--status-${status}) / 0.12)`,
       }}
