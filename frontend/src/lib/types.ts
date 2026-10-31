@@ -179,6 +179,11 @@ export interface FileItem {
   ai_tool: string | null
   ai_prompt: string | null
   ai_seed: string | null
+  /** Для ссылок: адрес и заголовок со страницы (Open Graph). */
+  url: string | null
+  link_title: string | null
+  /** Для файлов из Telegram: тема, автор сообщения в чате и ссылка «Открыть в Telegram». */
+  tg: { topic_id: number | null; topic_title: string | null; message_id: number; author: string | null; url: string | null } | null
   uploaded_at: string
   uploaded_by: Person | null
   processing: boolean
@@ -228,4 +233,15 @@ export interface DuplicateInfo {
   uploaded_by: string | null
   uploaded_at: string
   attached_to: string[]
+}
+
+export interface LibraryItem extends FileItem {
+  attachments_count: number
+  attachments: { entity_type: string; entity_id: number; purpose: string; label: string | null }[]
+}
+
+export interface LibraryPage {
+  items: LibraryItem[]
+  total: number
+  next_before_id: number | null
 }

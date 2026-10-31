@@ -15,6 +15,7 @@ import Dashboard from '@/pages/Dashboard'
 const Assets = lazy(() => import('@/pages/Assets'))
 const Brand = lazy(() => import('@/pages/Brand'))
 const Journal = lazy(() => import('@/pages/Journal'))
+const Media = lazy(() => import('@/pages/Media'))
 const SceneDetail = lazy(() => import('@/pages/SceneDetail'))
 const Scenes = lazy(() => import('@/pages/Scenes'))
 const Setups = lazy(() => import('@/pages/Setups'))
@@ -27,6 +28,7 @@ const IMPLEMENTED: Record<string, JSX.Element> = {
   '/': <Dashboard />,
   '/scenes': <Scenes />,
   '/shots': <Shots />,
+  '/media': <Media />,
   '/assets': <Assets />,
   '/setups': <Setups />,
   '/sound': <Sound />,

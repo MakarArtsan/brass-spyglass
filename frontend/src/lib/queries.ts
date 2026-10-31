@@ -14,6 +14,8 @@ import type {
   AssetDetail,
   Attached,
   CommentItem,
+  FileItem,
+  LibraryPage,
   Meta,
   Scene,
   Setup,
@@ -342,4 +344,77 @@ export function warmUpRoute(qc: QueryClient, path: string): void {
     prefetch(keys.list('tasks'), fetchers.tasks)
     meta()
   }
+}
+
+// --- медиатека и ссылки --------------------------------------------------------------------------
+
+export interface LibraryFilter {
+  kind?: string
+  source?: string
+  author?: number
+  since?: string
+  until?: string
+  unattached?: boolean
+  q?: string
+}
+
+const libraryQuery = (filter: LibraryFilter, before: number | null): string => {
+  const params = new URLSearchParams()
+  for (const [key, value] of Object.entries(filter)) {
+    if (value !== undefined && value !== '' && value !== false) params.set(key, String(value))
+  }
+  if (before !== null) params.set('before_id', String(before))
+  return params.toString()
+}
+
+/** Все файлы проекта новыми сверху, постранично. */
+export function useLibrary(filter: LibraryFilter) {
+  return useInfiniteQuery({
+    queryKey: ['library', filter] as const,
+    initialPageParam: null as number | null,
+    queryFn: ({ pageParam }) => api<LibraryPage>(`/library?${libraryQuery(filter, pageParam)}`),
+    getNextPageParam: (last) => last.next_before_id,
+    // Пока файл обрабатывается (превью, заголовок ссылки), список перечитывается сам.
+    refetchInterval: (query) => (query.state.data?.pages.some((p) => p.items.some((i) => i.processing)) ? 2000 : false),
+  })
+}
+
+interface LinkTarget {
+  entityType: string
+  entityId: number
+  purpose: string
+}
+
+/** Ссылка как файл; можно сразу привязать к карточке. */
+export function useAddLink(target?: LinkTarget) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (url: string) =>
+      api<{ file: FileItem; created: boolean }>('/links', {
+        method: 'POST',
+        body: JSON.stringify({ url, ...(target ? { entity_type: target.entityType, entity_id: target.entityId, purpose: target.purpose } : {}) }),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['library'] })
+      if (target) void qc.invalidateQueries({ queryKey: keys.files(target.entityType, target.entityId) })
+      void qc.invalidateQueries({ queryKey: ['activity'] })
+    },
+  })
+}
+
+/** Привязка файлов из медиатеки к карточке без повторной загрузки. */
+export function useAttachFromLibrary(entityType: string, entityId: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ fileIds, purpose }: { fileIds: number[]; purpose: string }) => {
+      for (const fileId of fileIds) {
+        await api('/attachments', { method: 'POST', body: JSON.stringify({ file_id: fileId, entity_type: entityType, entity_id: entityId, purpose }) })
+      }
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: keys.files(entityType, entityId) })
+      void qc.invalidateQueries({ queryKey: ['library'] })
+      for (const k of ['shots', 'assets', 'scenes', 'shot', 'asset', 'activity']) void qc.invalidateQueries({ queryKey: [k] })
+    },
+  })
 }

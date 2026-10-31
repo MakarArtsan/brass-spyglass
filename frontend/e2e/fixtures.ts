@@ -78,3 +78,19 @@ function hash(text: string): number {
   for (const ch of text) h = (h * 31 + ch.charCodeAt(0)) | 0
   return h
 }
+
+/** Загрузка файла прямо через API (как делает клиент: инициализация → куски → завершение). */
+export async function uploadViaApi(
+  page: Page,
+  filePath: string,
+  target?: { entityType: string; entityId: number; purpose?: string },
+): Promise<{ file: { id: number; original_name: string } }> {
+  const data = fs.readFileSync(filePath)
+  const init = await api<{ id: string }>(page, 'POST', '/uploads', { name: path.basename(filePath), size: data.length })
+  const sent = await page.context().request.patch(`${BASE_URL}/api/uploads/${init.id}`, {
+    data,
+    headers: { 'Upload-Offset': '0', 'Content-Type': 'application/octet-stream' },
+  })
+  if (!sent.ok()) throw new Error(`PATCH upload → ${sent.status()} ${await sent.text()}`)
+  return api(page, 'POST', `/uploads/${init.id}/complete`, target ? { entity_type: target.entityType, entity_id: target.entityId, purpose: target.purpose ?? 'reference' } : {})
+}
