@@ -15,7 +15,9 @@ DEFAULT_PROJECT = {
     "title": "Битва при кривом зеркале",
     "title_en": "The Brass Spyglass",
     "contest": "1 Billion AI Film Award 2027",
-    # Подача до 20.11.2026 (по Дубаю), внутренний срок 18.11.2026 — до конца суток.
+    # Подача до 20.11.2026 по времени Дубая (UTC+4), до конца суток; это 22:59:59 по Москве (UTC+3).
+    # Час закрытия приёма организаторы нигде не публикуют — конец суток это допущение.
+    # Внутренний срок 18.11.2026 — тоже до конца суток.
     "deadline_official": datetime(2026, 11, 20, 23, 59, 59, tzinfo=DUBAI).astimezone(UTC),
     "deadline_internal": datetime(2026, 11, 18, 23, 59, 59, tzinfo=DUBAI).astimezone(UTC),
     "fps": 24,
@@ -23,7 +25,7 @@ DEFAULT_PROJECT = {
     "height": 1080,
     "target_min_sec": 300,
     "target_max_sec": 420,
-    "storage_limit_gb": 10.0,
+    "storage_limit_gb": 5.0,  # тариф Amvera
 }
 
 

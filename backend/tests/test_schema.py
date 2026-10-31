@@ -1,6 +1,7 @@
 """Схема: миграции совпадают с моделями, WAL, справочники в CHECK."""
 
 import sqlite3
+from datetime import timedelta, timezone
 
 import pytest
 from alembic.autogenerate import compare_metadata
@@ -46,6 +47,11 @@ def test_default_project_matches_spec(db):
     assert (project.target_min_sec, project.target_max_sec) == (300, 420)
     assert project.deadline_internal < project.deadline_official
     assert project.deadline_official.isoformat() == "2026-11-20T19:59:59+00:00"  # 23:59:59 по Дубаю
+    moscow = timezone(
+        timedelta(hours=3)
+    )  # UTC+3 круглый год, как и Дубай +4 — без перехода на лето
+    assert project.deadline_official.astimezone(moscow).isoformat() == "2026-11-20T22:59:59+03:00"
+    assert project.storage_limit_gb == 5  # тариф Amvera
 
 
 def test_projects_seed_is_idempotent(db):

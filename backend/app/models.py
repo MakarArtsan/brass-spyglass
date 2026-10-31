@@ -125,7 +125,7 @@ class Project(Timestamps, Base):
     height: Mapped[int] = mapped_column(Integer, default=1080)
     target_min_sec: Mapped[int] = mapped_column(Integer, default=300)
     target_max_sec: Mapped[int] = mapped_column(Integer, default=420)
-    storage_limit_gb: Mapped[float] = mapped_column(Float, default=10.0)
+    storage_limit_gb: Mapped[float] = mapped_column(Float, default=5.0)
 
 
 class User(Timestamps, Base):

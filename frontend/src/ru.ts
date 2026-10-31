@@ -64,8 +64,6 @@ export const ru = {
   },
   side: { north: 'Север', south: 'Юг' },
   countdown: {
-    internal: 'До внутреннего срока',
-    internalShort: 'До срока',
     official: 'До подачи',
     days: 'дн',
     hours: 'ч',
@@ -91,7 +89,9 @@ export const ru = {
     deadlines: 'Сроки',
     internalDeadline: 'Внутренний срок',
     officialDeadline: 'Официальная подача',
-    dubai: 'по Дубаю',
+    // Срок показываем по Москве (там живёт команда) и по Дубаю (так он назван в правилах конкурса).
+    deadlineMoscow: (date: string, time: string) => `${date}, ${time} МСК`,
+    deadlineDubai: (date: string, time: string) => `${date}, ${time} по Дубаю`,
     targetRuntime: (min: string, max: string) => `цель ${min}–${max}`,
     stageNote: 'Рабочий трекер — в разделах слева. Виджеты дашборда появятся на этапе 2.',
   },

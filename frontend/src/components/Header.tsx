@@ -5,7 +5,7 @@ import { useIsDesktop } from '@/hooks/useMediaQuery'
 import type { Project } from '@/lib/api'
 import { ru } from '@/ru'
 
-/** Шапка: карта пролива на фоне, название фильма и отсчёт до внутреннего срока. */
+/** Шапка: карта пролива на фоне, название фильма и отсчёт до официального срока подачи. */
 export function Header({ project }: { project?: Project }) {
   const desktop = useIsDesktop()
   return (
@@ -21,8 +21,8 @@ export function Header({ project }: { project?: Project }) {
         </div>
         {project && (
           <Countdown
-            target={project.deadline_internal}
-            label={desktop ? ru.countdown.internal : ru.countdown.internalShort}
+            target={project.deadline_official}
+            label={ru.countdown.official}
             parts={['d', 'h']}
             small={!desktop}
             className="shrink-0 items-end"

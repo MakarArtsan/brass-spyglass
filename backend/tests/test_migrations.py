@@ -1,4 +1,4 @@
-"""Миграция 0002 на заполненной базе этапа 0: данные не теряются, справочники переименованы."""
+"""Миграции на заполненной базе: 0002 не теряет данные и переименовывает справочники, 0003 меняет лимит диска."""
 
 import sqlite3
 from pathlib import Path
@@ -80,3 +80,29 @@ def test_0002_renames_placeholder_values_and_enforces_new_checks(env):
         except sqlite3.IntegrityError:
             continue
         raise AssertionError(f"ограничение не сработало: {bad}")
+
+
+def test_0003_replaces_only_the_untouched_10gb_placeholder(env):
+    (env / "db").mkdir(parents=True)
+    cfg = _cfg()
+    command.upgrade(cfg, "0002")
+
+    path = env / "db" / "app.sqlite"
+    db = sqlite3.connect(path)
+    for project_id, limit in ((1, 10), (2, 8)):  # заглушка этапа 0 и лимит, поправленный вручную
+        db.execute(
+            "insert into project(id,title,title_en,contest,deadline_official,deadline_internal,fps,"
+            "width,height,target_min_sec,target_max_sec,storage_limit_gb,created_at,updated_at)"
+            " values (?,'t','t','c',?,?,24,1920,1080,300,420,?,?,?)",
+            (project_id, NOW, NOW, limit, NOW, NOW),
+        )
+    db.commit()
+    db.close()
+
+    command.upgrade(cfg, "head")
+
+    db = sqlite3.connect(path)
+    assert db.execute("select id,storage_limit_gb from project order by id").fetchall() == [
+        (1, 5.0),
+        (2, 8.0),
+    ]
