@@ -2,12 +2,14 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { chromium } from 'playwright'
+import { seedDemo } from './demo.mjs'
 import { BASE_URL, sessionCookie } from './session.mjs'
 
 const out = process.argv[2] ?? 'screenshots'
 fs.mkdirSync(out, { recursive: true })
 
 const cookie = sessionCookie()
+const demo = await seedDemo(cookie)
 const browser = await chromium.launch()
 
 async function shoot(name, viewport, setup, { mobile = false } = {}) {
@@ -33,30 +35,42 @@ const phone = { width: 390, height: 844 }
 for (const [label, viewport, mobile] of [['desktop', desktop, false], ['phone', phone, true]]) {
   await shoot(`${label}-login`, viewport, { url: '/login', auth: false }, { mobile })
   await shoot(`${label}-dashboard`, viewport, { url: '/' }, { mobile })
-  await shoot(`${label}-team`, viewport, { url: '/team' }, { mobile })
-  await shoot(`${label}-placeholder`, viewport, { url: '/shots' }, { mobile })
+  await shoot(`${label}-scenes`, viewport, { url: '/scenes' }, { mobile })
+  await shoot(`${label}-scene-detail`, viewport, { url: `/scenes/${demo.scene}`, fullPage: true }, { mobile })
+  await shoot(`${label}-shots`, viewport, { url: '/shots' }, { mobile })
+  await shoot(`${label}-shot-card`, viewport, { url: `/shots?shot=${demo.firstShot}` }, { mobile })
+  await shoot(`${label}-assets`, viewport, { url: '/assets' }, { mobile })
+  await shoot(`${label}-asset-card`, viewport, { url: `/assets?asset=${demo.sheep}` }, { mobile })
+  await shoot(`${label}-setups`, viewport, { url: '/setups' }, { mobile })
+  await shoot(`${label}-sound`, viewport, { url: '/sound' }, { mobile })
+  await shoot(`${label}-tasks`, viewport, { url: '/tasks' }, { mobile })
+  await shoot(`${label}-journal`, viewport, { url: '/journal' }, { mobile })
   await shoot(`${label}-brand`, viewport, { url: '/brand', fullPage: true }, { mobile })
-  await shoot(`${label}-dashboard-light`, viewport, {
-    url: '/',
-    act: async (p) => {
-      if (mobile) await p.getByRole('button', { name: 'Ещё' }).click()
-      await p.getByRole('button', { name: /Светлая тема/ }).click()
-      if (mobile) await p.getByRole('dialog').getByRole('button', { name: 'Закрыть' }).click()
-    },
-  }, { mobile })
 }
 
-await shoot('phone-more-sheet', phone, {
-  url: '/',
-  act: (p) => p.getByRole('button', { name: 'Ещё' }).click(),
-}, { mobile: true })
-
-await shoot('desktop-lens-tube', desktop, {
-  url: '/brand',
+await shoot('desktop-status-menu', desktop, {
+  url: '/shots',
+  act: (p) => p.locator('tr[data-shot="01.04"]').getByRole('button', { name: /Статус/ }).click(),
+})
+await shoot('desktop-viewer-video', desktop, {
+  url: `/shots?shot=${demo.firstShot}`,
   act: async (p) => {
-    await p.getByRole('img', { name: 'Север и Юг' }).first().hover()
+    await p.getByRole('button', { name: /Открыть: Два зеркала/ }).first().click()
+    await p.waitForTimeout(600)
   },
 })
+await shoot('desktop-viewer-audio', desktop, {
+  url: `/shots?shot=${demo.firstShot}`,
+  act: async (p) => {
+    await p.getByRole('button', { name: /Открыть: Скрип трубы/ }).first().click()
+    await p.waitForTimeout(1200)
+  },
+})
+await shoot('desktop-lens-tile', desktop, {
+  url: `/shots?shot=${demo.firstShot}`,
+  act: (p) => p.getByRole('button', { name: /Открыть: Референс пролива/ }).first().hover(),
+})
+await shoot('phone-bottom-sheet-more', phone, { url: '/', act: (p) => p.getByRole('button', { name: 'Ещё' }).click() }, { mobile: true })
 
 await browser.close()
 console.log('готово →', out)

@@ -18,6 +18,7 @@ from app.db import utcnow
 from app.permissions import Actor, PermissionDenied
 
 __all__ = [
+    "bulk_status",
     "Actor",
     "ConflictError",
     "NotFoundError",
@@ -83,6 +84,9 @@ ENTITIES: dict[str, EntitySpec] = {
             "drum_level",
             "meaning",
             "cut_notes",
+            "characters",
+            "key_assets",
+            "lines_en",
             "side",
             "final_file_id",
         },
@@ -97,6 +101,7 @@ ENTITIES: dict[str, EntitySpec] = {
             "description",
             "size",
             "camera",
+            "sound_note",
             "duration_sec",
             "tool",
             "stage",
@@ -117,7 +122,8 @@ ENTITIES: dict[str, EntitySpec] = {
     ),
     EntityType.SETUP_PAYOFF: EntitySpec(
         models.SetupPayoff,
-        WORK_FIELDS | {"motif", "setup_shot_ids", "payoff_shot_ids", "reader_takeaway", "risk"},
+        WORK_FIELDS
+        | {"number", "motif", "setup_shot_ids", "payoff_shot_ids", "reader_takeaway", "risk"},
     ),
     EntityType.SOUND_CUE: EntitySpec(
         models.SoundCue,
@@ -224,11 +230,23 @@ def _check_fields(allowed: frozenset[str], data: dict[str, Any]) -> None:
         raise ValidationError(f"Поля нельзя менять: {', '.join(sorted(unknown))}")
 
 
+def _explain(message: str) -> str:
+    if "UNIQUE" in message:
+        return "Такая запись уже есть: код или номер заняты"
+    if "CHECK" in message:
+        return "Недопустимое значение поля"
+    if "FOREIGN KEY" in message:
+        return "Ссылка на несуществующую запись"
+    if "NOT NULL" in message:
+        return "Не заполнено обязательное поле"
+    return f"Данные нарушают ограничения: {message}"
+
+
 def _flush(db: Session) -> None:
     try:
         db.flush()
     except IntegrityError as exc:
-        raise ConflictError(f"Данные нарушают ограничения: {exc.orig}") from exc
+        raise ConflictError(_explain(str(exc.orig))) from exc
 
 
 def get(
@@ -339,3 +357,13 @@ def restore(db: Session, actor: Actor, entity_type: str, entity_id: int) -> Any:
         db, actor.id, "restore", entity_type, entity_id, None, getattr(obj, "project_id", None)
     )
     return obj
+
+
+def bulk_status(
+    db: Session, actor: Actor, entity_type: str, ids: list[int], status: str
+) -> list[Any]:
+    """Групповая смена статуса (шот-лист). Каждая карточка проходит обычное обновление:
+    права проверяются по каждой, в журнал пишется строка на каждую. Всё или ничего."""
+    if not ids:
+        raise ValidationError("Не выбрано ни одной записи")
+    return [update(db, actor, entity_type, entity_id, {"status": status}) for entity_id in ids]

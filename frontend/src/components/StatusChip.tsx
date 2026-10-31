@@ -12,12 +12,11 @@ export function StatusChip({ status, className }: Props) {
   return (
     <span
       className={cn(
-        'inline-flex min-h-[28px] items-center gap-1.5 rounded-full border px-3 text-xs font-semibold',
+        'inline-flex min-h-[28px] items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-xs font-semibold',
         status === 'cut' && 'line-through',
         className,
       )}
       style={{
-        color: `rgb(var(--status-${status}))`,
         borderColor: `rgb(var(--status-${status}) / 0.5)`,
         backgroundColor: `rgb(var(--status-${status}) / 0.12)`,
       }}

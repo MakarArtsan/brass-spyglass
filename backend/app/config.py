@@ -12,6 +12,9 @@ class Settings(BaseSettings):
 
     data_dir: Path = Path("/data")
     frontend_dir: Path | None = None  # собранный фронтенд; по умолчанию frontend/dist
+    # Excel-трекер для стартовых данных. Не задан — берётся seed/ рядом с приложением,
+    # пустая строка отключает автоимпорт.
+    seed_xlsx: str | None = None
 
     tg_api_id: int | None = None
     tg_api_hash: str = ""
@@ -25,12 +28,21 @@ class Settings(BaseSettings):
     session_days: int = 30
     cookie_secure: bool = True
     login_token_ttl_sec: int = 300
+    file_link_ttl_sec: int = 3600  # срок жизни подписанных ссылок на файлы
+    # Размер куска при загрузке. Если вход Amvera режет тело запроса (413), поставьте 1.
+    upload_chunk_mb: int = 8
     membership_recheck_hours: int = 24
 
     @computed_field  # type: ignore[prop-decorator]
     @property
     def db_path(self) -> Path:
         return self.data_dir / "db" / "app.sqlite"
+
+    @property
+    def seed_path(self) -> Path | None:
+        if self.seed_xlsx is None:
+            return Path(__file__).resolve().parent.parent / "seed" / "Krivoe_zerkalo_tracker.xlsx"
+        return Path(self.seed_xlsx) if self.seed_xlsx else None
 
     @property
     def files_dir(self) -> Path:

@@ -38,11 +38,11 @@ test.describe('бренд', () => {
     expect(bg).toBe('rgb(243, 238, 225)')
   })
 
-  test('в шапке отсчёт до внутреннего срока, дни и часы', async ({ page }) => {
+  test('в шапке отсчёт до официального срока подачи, дни и часы', async ({ page }) => {
     await page.goto('/')
     const timer = page.locator('header').getByRole('timer')
     await expect(timer).toBeVisible()
-    await expect(timer).toHaveAttribute('aria-label', /До (внутреннего )?срока: \d+ дн \d+ ч/)
+    await expect(timer).toHaveAttribute('aria-label', /До подачи: \d+ дн \d+ ч/)
   })
 
   test('в подвале бейдж конкурса', async ({ page }) => {

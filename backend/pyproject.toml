@@ -14,6 +14,7 @@ ignore = ["B008"]  # Depends() в аргументах — норма для Fas
 
 [tool.ruff.lint.per-file-ignores]
 "alembic/versions/*" = ["E501", "I001", "UP", "Q"]
+"tests/*" = ["E501"]  # в тестах длинные литералы читаются лучше, чем переносы
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

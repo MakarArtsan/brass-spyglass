@@ -1,18 +1,23 @@
 import { AnimatePresence, motion as fm } from 'framer-motion'
+import { Suspense } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { motion } from '@/brand'
 import { BottomNav } from '@/components/BottomNav'
 import { ContestBadge } from '@/components/ContestBadge'
 import { Header } from '@/components/Header'
 import { Sidebar } from '@/components/Sidebar'
+import { Toaster } from '@/components/Toast'
+import { UploadProvider } from '@/components/Uploads'
 import { useProject } from '@/hooks/useAuth'
 import type { Me } from '@/lib/api'
+import { ru } from '@/ru'
 
 /** ПК: левый сайдбар. Смартфон: нижняя панель. Одна и та же страница в двух раскладках. */
 export function AppShell({ me }: { me: Me }) {
   const { data: project } = useProject()
   const location = useLocation()
   return (
+    <UploadProvider>
     <div className="min-h-dvh lg:flex">
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-brass focus:px-3 focus:py-2 focus:text-on-brass">
         К содержимому
@@ -20,7 +25,7 @@ export function AppShell({ me }: { me: Me }) {
       <Sidebar user={me.user} abilities={me.abilities} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Header project={project} />
-        <main id="main" className="flex-1 px-4 py-6 lg:px-8 lg:pb-10">
+        <main id="main" className="min-h-dvh flex-1 px-4 py-6 lg:px-8 lg:pb-10">
           <AnimatePresence mode="wait" initial={false}>
             <fm.div
               key={location.pathname}
@@ -29,7 +34,9 @@ export function AppShell({ me }: { me: Me }) {
               exit={{ opacity: 0 }}
               transition={{ duration: motion.fast, ease: motion.ease }}
             >
-              <Outlet />
+              <Suspense fallback={<div role="status" className="py-8 text-fog">{ru.app.loading}</div>}>
+                <Outlet />
+              </Suspense>
             </fm.div>
           </AnimatePresence>
         </main>
@@ -38,6 +45,8 @@ export function AppShell({ me }: { me: Me }) {
         </footer>
       </div>
       <BottomNav user={me.user} abilities={me.abilities} />
+      <Toaster />
     </div>
+    </UploadProvider>
   )
 }

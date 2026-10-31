@@ -1,3 +1,4 @@
+import { lazy } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppShell } from '@/components/AppShell'
 import { LensFilters } from '@/components/LensFilters'
@@ -5,15 +6,32 @@ import { useMe } from '@/hooks/useAuth'
 import { ApiError } from '@/lib/api'
 import { NAV } from '@/nav'
 import { ru } from '@/ru'
-import Brand from '@/pages/Brand'
 import Dashboard from '@/pages/Dashboard'
 import Login from '@/pages/Login'
 import NotFound from '@/pages/NotFound'
 import Placeholder from '@/pages/Placeholder'
-import Team from '@/pages/Team'
+
+// Страницы грузятся по требованию: на дашборде и экране входа не нужны dnd-kit, wavesurfer и т. д.
+const Assets = lazy(() => import('@/pages/Assets'))
+const Brand = lazy(() => import('@/pages/Brand'))
+const Journal = lazy(() => import('@/pages/Journal'))
+const SceneDetail = lazy(() => import('@/pages/SceneDetail'))
+const Scenes = lazy(() => import('@/pages/Scenes'))
+const Setups = lazy(() => import('@/pages/Setups'))
+const Shots = lazy(() => import('@/pages/Shots'))
+const Sound = lazy(() => import('@/pages/Sound'))
+const Tasks = lazy(() => import('@/pages/Tasks'))
+const Team = lazy(() => import('@/pages/Team'))
 
 const IMPLEMENTED: Record<string, JSX.Element> = {
   '/': <Dashboard />,
+  '/scenes': <Scenes />,
+  '/shots': <Shots />,
+  '/assets': <Assets />,
+  '/setups': <Setups />,
+  '/sound': <Sound />,
+  '/tasks': <Tasks />,
+  '/journal': <Journal />,
   '/team': <Team />,
 }
 
@@ -47,6 +65,7 @@ function Protected() {
             element={IMPLEMENTED[item.path] ?? <Placeholder path={item.path} />}
           />
         ))}
+        <Route path="/scenes/:id" element={<SceneDetail />} />
         <Route path="/brand" element={<Brand />} />
         <Route path="*" element={<NotFound />} />
       </Route>

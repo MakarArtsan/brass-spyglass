@@ -37,16 +37,16 @@ test.describe('раскладки', () => {
     await sheet.getByRole('link', { name: 'Ассеты' }).click()
     await expect(page).toHaveURL(/\/assets$/)
     await expect(sheet).toBeHidden()
-    await expect(page.getByRole('heading', { name: 'Ассеты' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Ассеты', level: 1 })).toBeVisible()
   })
 
-  test('навигация открывает разделы-заглушки с номером этапа', async ({ page, isMobile }) => {
+  test('разделы следующих этапов — заглушки с номером этапа', async ({ page, isMobile }) => {
     test.skip(!!isMobile, 'на телефоне проверено через «Ещё»')
     await page.goto('/')
-    await page.getByRole('link', { name: 'Шот-лист' }).click()
-    await expect(page).toHaveURL(/\/shots$/)
-    await expect(page.getByRole('heading', { name: 'Шот-лист' })).toBeVisible()
-    await expect(page.getByText('Раздел появится на этапе 1')).toBeVisible()
+    await page.getByRole('link', { name: 'Аниматик' }).click()
+    await expect(page).toHaveURL(/\/animatic$/)
+    await expect(page.getByRole('heading', { name: 'Аниматик' })).toBeVisible()
+    await expect(page.getByText('Раздел появится на этапе 3')).toBeVisible()
   })
 
   test('неизвестный адрес — страница 404 с возвратом на дашборд', async ({ page }) => {
