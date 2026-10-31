@@ -416,3 +416,26 @@ async def test_a_regular_upload_is_refused_when_it_does_not_fit_the_disk(tg):
         db.commit()
     response = client.post("/api/uploads", json={"name": "big.mp4", "size": 50_000_000})
     assert response.status_code == 507 and "не хватает места" in response.json()["detail"]
+
+
+@pytest.mark.filterwarnings("ignore:coroutine .* was never awaited:RuntimeWarning")
+def test_a_download_does_not_wait_for_a_loop_that_has_stopped(monkeypatch):
+    """Поток воркера не должен висеть до конца часового тайм-аута, когда главный цикл остановлен."""
+    import asyncio
+    import time
+
+    from app.media import MediaError
+    from app.tg import importer, runtime
+
+    stopped = asyncio.new_event_loop()  # создан, но не запущен — как цикл после выключения
+    monkeypatch.setattr(runtime, "loop", stopped)
+    monkeypatch.setattr(importer, "WAIT_SLICE_SEC", 0.05)
+
+    async def never() -> None:
+        await asyncio.sleep(3600)
+
+    started = time.monotonic()
+    with pytest.raises(MediaError):
+        importer._await(never(), timeout=60)
+    assert time.monotonic() - started < 5
+    stopped.close()

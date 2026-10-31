@@ -7,6 +7,7 @@
 """
 
 import asyncio
+import concurrent.futures
 import hashlib
 import logging
 import time
@@ -29,6 +30,7 @@ from app.tg.types import MediaInfo
 log = logging.getLogger(__name__)
 
 DOWNLOAD_TIMEOUT_SEC = 3600
+WAIT_SLICE_SEC = 1.0
 PROGRESS_EVERY_SEC = 1.5
 HASH_BLOCK = 1 << 20
 
@@ -36,8 +38,22 @@ HASH_BLOCK = 1 << 20
 def _await[T](coro: Coroutine[Any, Any, T], timeout: float = DOWNLOAD_TIMEOUT_SEC) -> T:
     loop = runtime.loop
     if loop is None:
+        coro.close()
         raise MediaError("Telegram не подключён")
-    return asyncio.run_coroutine_threadsafe(coro, loop).result(timeout)
+    future = asyncio.run_coroutine_threadsafe(coro, loop)
+    deadline = time.monotonic() + timeout
+    # Ждём короткими кусками: если главный цикл остановлен (перезапуск приложения), поток не должен
+    # висеть до конца часового тайма-аута и задерживать выключение.
+    while True:
+        try:
+            return future.result(WAIT_SLICE_SEC)
+        except concurrent.futures.TimeoutError:
+            if loop.is_closed() or not loop.is_running():
+                future.cancel()
+                raise MediaError("Приложение остановлено, загрузка из Telegram прервана") from None
+            if time.monotonic() >= deadline:
+                future.cancel()
+                raise MediaError("Telegram не ответил вовремя") from None
 
 
 def _gateway() -> Any:
