@@ -1,5 +1,8 @@
 import { Plus } from 'lucide-react'
 import { useState } from 'react'
+import { DashFilterBanner } from '@/components/DashFilterBanner'
+import { useDashFilter } from '@/hooks/useDashFilter'
+import { useMe } from '@/hooks/useAuth'
 import { EditableSelect, EditableText } from '@/components/Editable'
 import { PageHeader } from '@/components/PageHeader'
 import { StatusPill } from '@/components/StatusPill'
@@ -80,8 +83,18 @@ export default function Tasks() {
 
   const blockOptions = (meta?.task_block ?? []).map((b) => ({ value: b, label: ru.taskBlock[b as keyof typeof ru.taskBlock] }))
   const priorityOptions = (meta?.priority ?? []).map((p) => ({ value: p, label: ru.priority[p as keyof typeof ru.priority] }))
+  const dash = useDashFilter()
+  const { data: me } = useMe()
+  const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Moscow' }) // ГГГГ-ММ-ДД по Москве
   const visible = (tasks ?? [])
-    .filter((t) => (block === '' || t.block === block) && !(hideDone && (t.status === 'done' || t.status === 'cut')))
+    .filter(
+      (t) =>
+        (block === '' || t.block === block) &&
+        !(hideDone && (t.status === 'done' || t.status === 'cut')) &&
+        (dash.status === null || dash.status.includes(t.status)) &&
+        (!dash.overdue || (t.due_date !== null && t.due_date < today && t.status !== 'done' && t.status !== 'cut')) &&
+        (!dash.mine || (me !== undefined && t.assignee_id === me.user.id && t.status !== 'done' && t.status !== 'cut')),
+    )
     .sort((a, b) => (a.due_date ?? '9999').localeCompare(b.due_date ?? '9999') || a.code.localeCompare(b.code))
 
   const statusPill = (t: Task) => (
@@ -102,6 +115,7 @@ export default function Tasks() {
           )
         }
       />
+      <DashFilterBanner filter={dash} />
       {adding && <NewTask tasks={tasks} onDone={() => setAdding(false)} />}
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <select value={block} onChange={(e) => setBlock(e.target.value)} aria-label={ru.tasks.block} className="min-h-touch rounded-lg border border-line bg-chart px-3 text-sm">

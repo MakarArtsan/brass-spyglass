@@ -12,6 +12,8 @@ import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, v
 import { CSS } from '@dnd-kit/utilities'
 import { GripVertical, Plus } from 'lucide-react'
 import { useState } from 'react'
+import { DashFilterBanner } from '@/components/DashFilterBanner'
+import { useDashFilter } from '@/hooks/useDashFilter'
 import { Link } from 'react-router-dom'
 import { DrumLevel } from '@/components/DrumLevel'
 import { PageHeader } from '@/components/PageHeader'
@@ -115,7 +117,10 @@ export default function Scenes() {
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   )
+  const dash = useDashFilter()
   const ordered = [...(scenes ?? [])].sort((a, b) => a.order - b.order || a.id - b.id)
+  // С фильтром виден неполный список: порядок по нему менять нельзя, иначе пересчитается по огрызку.
+  const shown = dash.nofinal ? ordered.filter((s) => s.status !== 'cut' && s.final_file_id === null) : ordered
 
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return
@@ -141,13 +146,14 @@ export default function Scenes() {
           )
         }
       />
+      <DashFilterBanner filter={dash} />
       {adding && <NewScene onDone={() => setAdding(false)} next={Math.max(0, ...ordered.map((s) => s.number)) + 1} />}
       <p className="mono mb-3 text-xs text-fog">{ru.scenes.total(timecode(byShots), timecode(planned))}</p>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-        <SortableContext items={ordered.map((s) => s.id)} strategy={verticalListSortingStrategy}>
+        <SortableContext items={shown.map((s) => s.id)} strategy={verticalListSortingStrategy}>
           <ul className="space-y-3">
-            {ordered.map((scene) => (
-              <SceneCard key={scene.id} scene={scene} dragEnabled={perms.canReorder} />
+            {shown.map((scene) => (
+              <SceneCard key={scene.id} scene={scene} dragEnabled={perms.canReorder && !dash.active} />
             ))}
           </ul>
         </SortableContext>
