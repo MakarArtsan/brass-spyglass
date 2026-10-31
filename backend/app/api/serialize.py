@@ -284,6 +284,7 @@ def entity_labels(db: Session, pairs: set[tuple[str, int | None]]) -> dict[tuple
     fill(EntityType.TASK, models.Task, lambda r: f"задача {r.code}")
     fill(EntityType.FILE, models.File, lambda r: f"файл {r.original_name or r.id}")
     fill(EntityType.USER, models.User, lambda r: f"участник {r.name}")
+    fill(EntityType.COMMENT, models.Comment, lambda r: "комментарий")
     return out
 
 

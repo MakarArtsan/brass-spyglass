@@ -18,7 +18,8 @@ from app.services.core import NotFoundError
 
 router = APIRouter(dependencies=[Depends(session.same_origin)])
 
-FEED_LIMIT = 12
+FEED_LIMIT = 10
+FEED_DIFF_FIELDS = 3  # у правки показываем не больше трёх полей «было → стало»
 
 
 def _feed(db: Session) -> list[dict[str, Any]]:
@@ -59,12 +60,18 @@ def _feed(db: Session) -> list[dict[str, Any]]:
                 "entity_id": r.entity_id,
                 "label": labels.get((r.entity_type, r.entity_id)) if r.entity_id else None,
                 "actor": people.get(r.actor_id) if r.actor_id else None,
-                "status": diff.get("status") if isinstance(diff.get("status"), list) else None,
+                "diff": _changes(diff) if r.action in ("status", "update") else None,
                 "thumb_url": serialize.file_urls(file).get("thumb") if file else None,
                 "file_kind": file.kind if file else None,
             }
         )
     return items
+
+
+def _changes(diff: dict[str, Any]) -> dict[str, Any]:
+    """Только пары «было → стало»: полный дифф создания может быть большим и в ленте не нужен."""
+    pairs = {k: v for k, v in diff.items() if isinstance(v, list) and len(v) == 2}
+    return dict(list(pairs.items())[:FEED_DIFF_FIELDS])
 
 
 @router.get("/dashboard")

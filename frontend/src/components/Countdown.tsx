@@ -1,5 +1,4 @@
-import { AnimatePresence, motion as fm, useReducedMotion } from 'framer-motion'
-import { COUNTDOWN, motion } from '@/brand'
+import { COUNTDOWN } from '@/brand'
 import { useNow } from '@/hooks/useNow'
 import { cn, pad2 } from '@/lib/utils'
 import { ru } from '@/ru'
@@ -13,7 +12,6 @@ const UNITS: Record<Part, string> = {
 }
 
 function Flip({ value, small }: { value: string; small: boolean }) {
-  const reduce = useReducedMotion()
   return (
     <span
       className={cn(
@@ -22,18 +20,10 @@ function Flip({ value, small }: { value: string; small: boolean }) {
         small ? 'h-9 min-w-[2.4rem] px-1.5 text-xl' : 'h-14 min-w-[3.6rem] px-2 text-3xl',
       )}
     >
-      <AnimatePresence mode="popLayout" initial={false}>
-        <fm.span
-          key={value}
-          className="mono m-auto font-semibold leading-none"
-          initial={reduce ? false : { y: '-40%', opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={reduce ? undefined : { y: '40%', opacity: 0, transition: { duration: motion.fast / 2 } }}
-          transition={{ duration: motion.base, ease: motion.ease }}
-        >
-          {value}
-        </fm.span>
-      </AnimatePresence>
+      {/* Новое значение — новый элемент: цифра «перекидывается» CSS-анимацией, без библиотеки. */}
+      <span key={value} className="mono m-auto font-semibold leading-none motion-safe:animate-flip-in">
+        {value}
+      </span>
     </span>
   )
 }

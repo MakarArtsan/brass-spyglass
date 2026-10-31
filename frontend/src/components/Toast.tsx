@@ -1,4 +1,4 @@
-import { AnimatePresence, motion as fm } from 'framer-motion'
+import { AnimatePresence, m as fm } from 'framer-motion'
 import { useEffect, useState } from 'react'
 import { motion } from '@/brand'
 import { onToast } from '@/lib/toast'

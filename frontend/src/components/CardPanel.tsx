@@ -1,4 +1,4 @@
-import { AnimatePresence, motion as fm } from 'framer-motion'
+import { AnimatePresence, m as fm } from 'framer-motion'
 import { X } from 'lucide-react'
 import { useEffect, useRef, type ReactNode } from 'react'
 import { motion } from '@/brand'

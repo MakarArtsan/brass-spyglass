@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { AnimatePresence, motion as fm } from 'framer-motion'
+import { AnimatePresence, m as fm } from 'framer-motion'
 import { Camera, Check, Loader2, Plus, TriangleAlert, X } from 'lucide-react'
 import {
   createContext,

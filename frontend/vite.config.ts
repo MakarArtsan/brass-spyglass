@@ -33,10 +33,10 @@ export default defineConfig({
     sourcemap: false,
     rollupOptions: {
       output: {
-        // Библиотеки меняются редко — отдельные чанки кэшируются между релизами.
+        // Библиотеки меняются редко — отдельные чанки кэшируются между релизами. framer-motion сюда не входит:
+        // его лёгкое ядро идёт с приложением, а анимации и жесты грузятся своим чанком (lib/motionFeatures).
         manualChunks: {
           react: ['react', 'react-dom', 'react-router-dom'],
-          motion: ['framer-motion'],
           query: ['@tanstack/react-query'],
         },
       },

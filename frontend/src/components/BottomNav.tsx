@@ -1,4 +1,4 @@
-import { AnimatePresence, motion as fm } from 'framer-motion'
+import { AnimatePresence, m as fm } from 'framer-motion'
 import { MoreHorizontal, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'

@@ -13,6 +13,25 @@
         if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t
       } catch (e) {}
     </script>
+    <script>
+      // Запросы стартуют до загрузки скриптов: данные идут параллельно с кодом, а lib/api.ts забирает
+      // готовый ответ (один раз, только для GET). Без этого на медленной сети первый показ ждёт
+      // цепочку «скрипты → запрос → ответ».
+      ;(function () {
+        var path = location.pathname
+        if (path.indexOf('/login') === 0 || !window.fetch) return
+        var early = (window.__early = {})
+        var start = function (key) {
+          early[key] = fetch('/api' + key, { credentials: 'same-origin' })
+          early[key].catch(function () {}) // ошибку обработает тот, кто заберёт ответ
+        }
+        start('/me')
+        if (path === '/') {
+          start('/project')
+          start('/dashboard')
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

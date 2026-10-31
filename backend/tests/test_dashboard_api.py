@@ -69,10 +69,10 @@ def test_status_change_moves_readiness_burndown_contribution_and_feed(api):
     assert today["statuses"] >= 1 and sum(today["by_user"].values()) >= 1
     assert d["activity"]["heatmap"][-1]["n"] >= 1
     top = d["feed"][0]
-    assert (top["entity_type"], top["action"], top["status"]) == (
+    assert (top["entity_type"], top["action"], top["diff"]) == (
         "shot",
         "status",
-        ["not_started", "done"],
+        {"status": ["not_started", "done"]},
     )
     assert top["actor"]["name"] == "Артём" and top["label"] == f"шот {shot['code']}"
 
@@ -144,3 +144,17 @@ def test_media_widget_counts_files_by_kind_and_reports_disk_usage(api):
     storage = media["storage"]
     assert storage["limit_bytes"] == 5 * 1024**3 and storage["used_bytes"] > 0
     assert storage["warn"] is False and storage["full"] is False
+
+
+def test_feed_labels_comments_and_shows_what_an_edit_changed(api):
+    shot = api.get("/api/shots").json()[0]
+    api.post(
+        "/api/comments", json={"entity_type": "shot", "entity_id": shot["id"], "body": "привет"}
+    )
+    api.patch(f"/api/shots/{shot['id']}", json={"description": "новое описание", "duration_sec": 4})
+    feed = _dash(api)["feed"]
+    edit, comment = feed[0], feed[1]
+    assert edit["action"] == "update" and set(edit["diff"]) == {"description", "duration_sec"}
+    assert all(isinstance(pair, list) and len(pair) == 2 for pair in edit["diff"].values())
+    assert (comment["entity_type"], comment["label"]) == ("comment", "комментарий")
+    assert comment["diff"] is None

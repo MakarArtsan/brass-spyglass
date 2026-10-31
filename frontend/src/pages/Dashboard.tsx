@@ -1,8 +1,13 @@
+import { lazy, Suspense } from 'react'
 import { Countdown } from '@/components/Countdown'
+import { Tile } from '@/components/dashboard/primitives'
 import { StatusChip } from '@/components/StatusChip'
 import { STATUS_ORDER } from '@/brand'
 import { useMe, useProject } from '@/hooks/useAuth'
 import { ru } from '@/ru'
+
+// Плитки — отдельный чанк: заголовок, факты и сроки рисуются сразу, а тяжёлые графики подтягиваются рядом.
+const DashboardTiles = lazy(() => import('@/pages/DashboardTiles'))
 
 // Москва UTC+3 и Дубай UTC+4 — оба без перехода на летнее время; пояса берёт Intl, смещения не зашиты.
 const moscowDate = new Intl.DateTimeFormat('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'long', year: 'numeric' })
@@ -33,7 +38,7 @@ function Fact({ label, value, sub, wide }: { label: string; value: string; sub?:
   )
 }
 
-/** Дашборд-витрина проекта. Виджеты со статистикой появятся на этапе 2. */
+/** Дашборд: сверху отсчёт и кольцо готовности; на ПК виджеты в сетке 12 колонок, на телефоне — в одну. */
 export default function Dashboard() {
   const { data: me } = useMe()
   const { data: project } = useProject()
@@ -43,35 +48,42 @@ export default function Dashboard() {
       <div>
         <p className="mono text-xs uppercase tracking-[0.2em] text-brass">{ru.dashboard.welcome}</p>
         <h1 className="mt-1 text-4xl">{ru.dashboard.hello(me.user.name)}</h1>
-        <p className="mt-2 max-w-2xl text-fog">{ru.dashboard.stageNote}</p>
       </div>
 
-      {!project && <div aria-hidden className="min-h-[640px]" />}
+      {!project && <div aria-hidden className="min-h-[220px]" />}
       {project && (
-        <>
-          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-            <Fact label={ru.dashboard.contest} value={project.contest} wide />
-            <Fact label={ru.dashboard.format} value={`${project.fps} fps`} sub={`${project.width} × ${project.height}`} />
-            <Fact
-              label={ru.dashboard.runtime}
-              value={`${mmss(project.target_min_sec)}–${mmss(project.target_max_sec)}`}
-              sub={ru.dashboard.targetRuntime(mmss(project.target_min_sec), mmss(project.target_max_sec))}
-            />
-            <Fact label={ru.dashboard.project} value={project.title_en} sub={project.title} wide />
-          </div>
-
-          <div className="panel grid gap-6 p-5 md:grid-cols-2">
-            <div className="space-y-2">
-              <Countdown target={project.deadline_internal} label={ru.dashboard.internalDeadline} />
-              <DeadlineAt iso={project.deadline_internal} />
-            </div>
-            <div className="space-y-2">
-              <Countdown target={project.deadline_official} label={ru.dashboard.officialDeadline} />
-              <DeadlineAt iso={project.deadline_official} />
-            </div>
-          </div>
-        </>
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+          <Fact label={ru.dashboard.contest} value={project.contest} wide />
+          <Fact label={ru.dashboard.format} value={`${project.fps} fps`} sub={`${project.width} × ${project.height}`} />
+          <Fact
+            label={ru.dashboard.runtime}
+            value={`${mmss(project.target_min_sec)}–${mmss(project.target_max_sec)}`}
+            sub={ru.dashboard.targetRuntime(mmss(project.target_min_sec), mmss(project.target_max_sec))}
+          />
+          <Fact label={ru.dashboard.project} value={project.title_en} sub={project.title} wide />
+        </div>
       )}
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+        {project && (
+          <Tile title={ru.dashboard.deadlines} className="lg:col-span-5">
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+              <div className="space-y-2">
+                <Countdown target={project.deadline_internal} label={ru.dashboard.internalDeadline} small />
+                <DeadlineAt iso={project.deadline_internal} />
+              </div>
+              <div className="space-y-2">
+                <Countdown target={project.deadline_official} label={ru.dashboard.officialDeadline} small />
+                <DeadlineAt iso={project.deadline_official} />
+              </div>
+            </div>
+          </Tile>
+        )}
+
+        <Suspense fallback={<div aria-hidden className="min-h-[900px] lg:col-span-12" />}>
+          <DashboardTiles />
+        </Suspense>
+      </div>
 
       <div className="flex flex-wrap gap-2" aria-label="Статусы">
         {STATUS_ORDER.map((s) => (

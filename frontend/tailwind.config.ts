@@ -36,6 +36,15 @@ export default {
         mono: [fonts.mono],
       },
       transitionDuration: { fast: `${motion.fast * 1000}ms`, base: `${motion.base * 1000}ms` },
+      // Без JS: переход страницы и «перекидные» цифры. Длительности — из brand.ts.
+      keyframes: {
+        'page-in': { from: { opacity: '0', transform: 'translateY(4px)' }, to: { opacity: '1', transform: 'none' } },
+        'flip-in': { from: { opacity: '0', transform: 'translateY(-40%)' }, to: { opacity: '1', transform: 'none' } },
+      },
+      animation: {
+        'page-in': `page-in ${motion.fast * 1000}ms cubic-bezier(${motion.ease.join(',')}) both`,
+        'flip-in': `flip-in ${motion.base * 1000}ms cubic-bezier(${motion.ease.join(',')}) both`,
+      },
       minHeight: { touch: '44px' },
       minWidth: { touch: '44px' },
       screens: { lg: '1024px' },

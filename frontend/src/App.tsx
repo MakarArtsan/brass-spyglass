@@ -6,10 +6,10 @@ import { useMe } from '@/hooks/useAuth'
 import { ApiError } from '@/lib/api'
 import { NAV } from '@/nav'
 import { ru } from '@/ru'
-import Dashboard from '@/pages/Dashboard'
 import Login from '@/pages/Login'
 import NotFound from '@/pages/NotFound'
 import Placeholder from '@/pages/Placeholder'
+import Dashboard from '@/pages/Dashboard'
 
 // Страницы грузятся по требованию: на дашборде и экране входа не нужны dnd-kit, wavesurfer и т. д.
 const Assets = lazy(() => import('@/pages/Assets'))

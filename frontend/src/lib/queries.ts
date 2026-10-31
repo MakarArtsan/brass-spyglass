@@ -6,7 +6,8 @@ import {
   type QueryClient,
 } from '@tanstack/react-query'
 import { useEffect, useRef } from 'react'
-import { api } from '@/lib/api'
+import { api, type Project } from '@/lib/api'
+import { dashboardKey, type DashboardData } from '@/lib/dashboard'
 import type {
   ActivityPage,
   Asset,
@@ -332,6 +333,10 @@ export function warmUpRoute(qc: QueryClient, path: string): void {
     void import('@/pages/Assets')
     prefetch(keys.list('assets'), fetchers.assets)
     meta()
+  } else if (path === '/') {
+    void import('@/pages/DashboardTiles')
+    prefetch(['project'], () => api<Project>('/project'))
+    prefetch(dashboardKey, () => api<DashboardData>('/dashboard'))
   } else if (path.startsWith('/tasks')) {
     void import('@/pages/Tasks')
     prefetch(keys.list('tasks'), fetchers.tasks)
