@@ -4,6 +4,7 @@ import { BottomNav } from '@/components/BottomNav'
 import { ContestBadge } from '@/components/ContestBadge'
 import { Header } from '@/components/Header'
 import { Sidebar } from '@/components/Sidebar'
+import { TgJobs } from '@/components/telegram/TgJobs'
 import { Toaster } from '@/components/Toast'
 import { UploadProvider } from '@/components/Uploads'
 import { useProject } from '@/hooks/useAuth'
@@ -39,6 +40,7 @@ export function AppShell({ me }: { me: Me }) {
       </div>
       <BottomNav user={me.user} abilities={me.abilities} />
       <Toaster />
+      <TgJobs />
     </div>
     </UploadProvider>
   )

@@ -20,9 +20,17 @@ function Meta({ file }: { file: FileItem }) {
         {who ? ru.files.addedBy(who.name, formatDateTime(file.uploaded_at)) : formatDateTime(file.uploaded_at)}
         {' · '}
         {sourceLabel[file.source]}
+        {file.tg?.topic_title && ` · ${ru.tg.fromTopic(file.tg.topic_title)}`}
+        {file.tg?.author && ` · ${ru.tg.sentBy(file.tg.author)}`}
         {file.size_bytes != null && ` · ${formatSize(file.size_bytes)}`}
         {file.width && file.height && ` · ${file.width}×${file.height}`}
       </span>
+      {file.tg?.url && (
+        <a href={file.tg.url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-touch shrink-0 items-center gap-1 text-brass hover:text-brass-light">
+          <ExternalLink size={14} aria-hidden />
+          {ru.tg.openInTelegram}
+        </a>
+      )}
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { Images, Link2 } from 'lucide-react'
+import { Images, Link2, Send } from 'lucide-react'
 import { lazy, Suspense, useState } from 'react'
 import { FileTile } from '@/components/media/FileTile'
 import { dropZone, UploadButtons } from '@/components/Uploads'
@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import { ru } from '@/ru'
 
 // Окно просмотра (плееры, wavesurfer) тяжёлое — грузим при первом открытии файла.
+const TelegramWindow = lazy(() => import('@/components/telegram/TelegramWindow'))
 const LibraryPicker = lazy(() => import('@/components/media/LibraryPicker'))
 const LinkDialog = lazy(() => import('@/components/media/LinkDialog'))
 const MediaViewer = lazy(() => import('@/components/media/MediaViewer').then((m) => ({ default: m.MediaViewer })))
@@ -29,7 +30,7 @@ export function FilesSection({ title, entityType, entityId, purposes, uploadPurp
   const { data } = useEntityFiles(entityType, entityId)
   const mutations = useFileMutations(entityType, entityId)
   const [open, setOpen] = useState<number | null>(null)
-  const [dialog, setDialog] = useState<'library' | 'link' | null>(null)
+  const [dialog, setDialog] = useState<'library' | 'link' | 'telegram' | null>(null)
   const items = (data ?? []).filter((a) => purposes.includes(a.purpose))
   // Ссылки открываются в новой вкладке, в окне просмотра листаются только файлы.
   const viewable = items.filter((a) => a.file.kind !== 'link')
@@ -49,6 +50,10 @@ export function FilesSection({ title, entityType, entityId, purposes, uploadPurp
         <UploadButtons target={{ entityType, entityId, purpose: uploadPurpose }} />
         {perms.canUpload && (
           <>
+            <button type="button" onClick={() => setDialog('telegram')} className="inline-flex min-h-touch items-center gap-1.5 rounded-lg border border-line px-3 text-sm text-fog hover:border-brass/60 hover:text-paper">
+              <Send size={16} aria-hidden />
+              {ru.tg.button}
+            </button>
             <button type="button" onClick={() => setDialog('library')} className="inline-flex min-h-touch items-center gap-1.5 rounded-lg border border-line px-3 text-sm text-fog hover:border-brass/60 hover:text-paper">
               <Images size={16} aria-hidden />
               {ru.library.fromLibrary}
@@ -91,6 +96,11 @@ export function FilesSection({ title, entityType, entityId, purposes, uploadPurp
       {dialog === 'library' && (
         <Suspense fallback={null}>
           <LibraryPicker entityType={entityType} entityId={entityId} purpose={uploadPurpose} onClose={() => setDialog(null)} />
+        </Suspense>
+      )}
+      {dialog === 'telegram' && (
+        <Suspense fallback={null}>
+          <TelegramWindow entityType={entityType} entityId={entityId} purpose={uploadPurpose} onClose={() => setDialog(null)} />
         </Suspense>
       )}
       {dialog === 'link' && (

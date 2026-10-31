@@ -36,6 +36,7 @@ type LiveEvent =
   | { type: 'hello' }
   | { type: 'resync' }
   | { type: 'activity'; action: string; entity_type: string; entity_id: number | null; actor_id: number | null }
+  | { type: 'tg'; topic_id: number | null }
   | JobEvent
 
 type Listener = (event: JobEvent) => void
@@ -77,6 +78,7 @@ class Batch {
       void qc.invalidateQueries({ queryKey: ['tg'] })
     }
     if (dirty.has('comment')) void qc.invalidateQueries({ queryKey: ['comments'] })
+    if (dirty.has('tg')) void qc.invalidateQueries({ queryKey: ['tg'] })
     if (dirty.has('project')) void qc.invalidateQueries({ queryKey: ['project'] })
     if (dirty.has('user')) void qc.invalidateQueries({ queryKey: ['users'] })
     // Почти всё, что происходит в проекте, видно на дашборде и в ленте.
@@ -119,8 +121,10 @@ export function useLiveUpdates(enabled: boolean): void {
         }
         if (event.type === 'resync') invalidateEverything(qc)
         else if (event.type === 'activity') batch.add(event.entity_type)
+        else if (event.type === 'tg') batch.add('tg')
         else if (event.type === 'job') {
           jobListeners.forEach((listener) => listener(event))
+          if (event.job_type === 'tg_import') batch.add('tg')
           if (event.status === 'done' || event.status === 'failed') batch.add('files')
         }
       }

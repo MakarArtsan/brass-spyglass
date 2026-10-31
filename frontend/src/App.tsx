@@ -23,12 +23,14 @@ const Shots = lazy(() => import('@/pages/Shots'))
 const Sound = lazy(() => import('@/pages/Sound'))
 const Tasks = lazy(() => import('@/pages/Tasks'))
 const Team = lazy(() => import('@/pages/Team'))
+const Telegram = lazy(() => import('@/pages/Telegram'))
 
 const IMPLEMENTED: Record<string, JSX.Element> = {
   '/': <Dashboard />,
   '/scenes': <Scenes />,
   '/shots': <Shots />,
   '/media': <Media />,
+  '/telegram': <Telegram />,
   '/assets': <Assets />,
   '/setups': <Setups />,
   '/sound': <Sound />,
