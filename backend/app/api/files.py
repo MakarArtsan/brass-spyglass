@@ -6,6 +6,7 @@ import mimetypes
 import os
 import tempfile
 import zipfile
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Annotated, Any, Literal
 from urllib.parse import quote
@@ -13,16 +14,16 @@ from urllib.parse import quote
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
+from sqlalchemy import exists, func, select
 from sqlalchemy.orm import Session
 from starlette.background import BackgroundTask
 
-from app import models, permissions, signing, uploads
+from app import metrics, models, permissions, signing, uploads
 from app.api import serialize
 from app.api.entities import ActorDep, DbDep, UserDep, input_model
 from app.auth import session
 from app.config import get_settings
-from app.constants import EntityType, Purpose
+from app.constants import EntityType, FileKind, FileSource, Purpose
 from app.services import core, files, links, projects
 
 router = APIRouter(dependencies=[Depends(session.same_origin)])
@@ -216,6 +217,117 @@ def serialize_json(value: dict[str, Any]) -> dict[str, Any]:
 
 
 # --- файлы и привязки ----------------------------------------------------------------------------
+
+
+class LinkIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    url: str = Field(min_length=1, max_length=2000)
+    entity_type: str | None = None
+    entity_id: int | None = None
+    purpose: Purpose = Purpose.REFERENCE
+
+
+@router.post("/links", status_code=status.HTTP_201_CREATED)
+def add_link(body: LinkIn, request: Request, db: DbDep, actor: ActorDep) -> dict[str, Any]:
+    """Ссылка как файл. Заголовок и картинку подтягивает фоновая задача, ответ приходит сразу."""
+    if (body.entity_type is None) != (body.entity_id is None):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Нужны и тип, и id карточки")
+    if body.entity_type is not None:
+        core.get(db, body.entity_type, body.entity_id)  # type: ignore[arg-type]
+    file, created = files.add_link(
+        db,
+        actor,
+        project_id=_project_id(db),
+        url=body.url,
+        entity_type=body.entity_type,
+        entity_id=body.entity_id,
+        purpose=body.purpose.value,
+    )
+    db.flush()
+    request.app.state.jobs.wake()
+    return {"file": serialize.files_out(db, [file])[0], "created": created}
+
+
+ESCAPE = "\\"
+
+
+def _like(text: str) -> str:
+    """Подстрока для LIKE: служебные символы пользователя не должны работать как шаблон."""
+    escaped = text.replace(ESCAPE, ESCAPE * 2).replace("%", ESCAPE + "%").replace("_", ESCAPE + "_")
+    return f"%{escaped}%"
+
+
+@router.get("/library")
+def library(
+    db: DbDep,
+    _: UserDep,
+    kind: FileKind | None = None,
+    source: FileSource | None = None,
+    author: int | None = None,
+    since: date | None = None,
+    until: date | None = None,
+    unattached: bool = False,
+    q: Annotated[str | None, Query(max_length=200)] = None,
+    before_id: int | None = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 60,
+) -> dict[str, Any]:
+    """Медиатека: все файлы проекта, новые сверху. Фильтры по типу, источнику, автору, дате."""
+    stmt = select(models.File).where(models.File.deleted_at.is_(None))
+    if kind is not None:
+        stmt = stmt.where(models.File.kind == kind.value)
+    if source is not None:
+        stmt = stmt.where(models.File.source == source.value)
+    if author is not None:
+        stmt = stmt.where(models.File.uploaded_by == author)
+    if since is not None:  # сутки считаются по Москве, как и на дашборде
+        stmt = stmt.where(models.File.uploaded_at > metrics.end_of_day(since - timedelta(days=1)))
+    if until is not None:
+        stmt = stmt.where(models.File.uploaded_at <= metrics.end_of_day(until))
+    if unattached:
+        stmt = stmt.where(~exists().where(models.Attachment.file_id == models.File.id))
+    if q and q.strip():
+        pattern = _like(q.strip())
+        stmt = stmt.where(
+            models.File.original_name.ilike(pattern, escape=ESCAPE)
+            | models.File.link_title.ilike(pattern, escape=ESCAPE)
+            | models.File.url.ilike(pattern, escape=ESCAPE)
+            | models.File.tg_author.ilike(pattern, escape=ESCAPE)
+        )
+    total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+    if before_id is not None:
+        stmt = stmt.where(models.File.id < before_id)
+    rows = list(db.scalars(stmt.order_by(models.File.id.desc()).limit(limit + 1)))
+    more = len(rows) > limit
+    rows = rows[:limit]
+
+    items = serialize.files_out(db, rows)
+    attached: dict[int, list[models.Attachment]] = {}
+    for a in db.scalars(
+        select(models.Attachment)
+        .where(models.Attachment.file_id.in_([f.id for f in rows]))
+        .order_by(models.Attachment.id)
+    ):
+        attached.setdefault(a.file_id, []).append(a)
+    labels = serialize.entity_labels(
+        db, {(a.entity_type, a.entity_id) for group in attached.values() for a in group}
+    )
+    for item in items:
+        group = attached.get(item["id"], [])
+        item["attachments_count"] = len(group)
+        item["attachments"] = [
+            {
+                "entity_type": a.entity_type,
+                "entity_id": a.entity_id,
+                "purpose": a.purpose,
+                "label": labels.get((a.entity_type, a.entity_id)),
+            }
+            for a in group[:4]
+        ]
+    return {
+        "items": items,
+        "total": total,
+        "next_before_id": rows[-1].id if more and rows else None,
+    }
 
 
 @router.get("/files")

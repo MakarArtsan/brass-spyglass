@@ -13,7 +13,7 @@ from collections.abc import Callable
 from sqlalchemy.orm import Session
 
 from app import db as database
-from app import media, models
+from app import linkpreview, media, models
 from app.config import Settings, get_settings
 from app.constants import FileKind, JobType
 from app.services import files as file_service
@@ -30,7 +30,34 @@ def _file(db: Session, job: models.Job) -> models.File | None:
     return None if file is None or file.deleted_at is not None or not file.path else file
 
 
+def _link_preview(db: Session, file: models.File, settings: Settings) -> None:
+    """Карточка ссылки: заголовок и картинка Open Graph. Ходит в чужую сеть — см. linkpreview."""
+    url, file_id = file.url, file.id
+    db.rollback()  # не держим транзакцию на время сетевых запросов
+    if not url:
+        return
+    card = linkpreview.fetch_card(url)
+    fields: dict[str, object] = {"link_title": card.title}
+    if card.image:
+        out_dir = settings.cache_dir / str(file_id)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        raw = out_dir / "og-source"
+        raw.write_bytes(card.image)
+        try:
+            media.image_variants(raw, out_dir)  # перекодирует: чужие байты на диске не остаются
+            fields["thumb_path"] = f"{file_id}/thumb.jpg"
+        except media.MediaError:
+            pass  # картинка битая — остаётся карточка с заголовком
+        finally:
+            raw.unlink(missing_ok=True)
+    file_service.apply_media_info(db, file_id, **fields)
+
+
 def _preview(db: Session, job: models.Job, settings: Settings) -> None:
+    link = db.get(models.File, job.payload.get("file_id"))
+    if link is not None and link.deleted_at is None and link.kind == FileKind.LINK:
+        _link_preview(db, link, settings)
+        return
     file = _file(db, job)
     if file is None:
         return

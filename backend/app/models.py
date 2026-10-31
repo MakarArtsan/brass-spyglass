@@ -383,6 +383,10 @@ class TgTopic(Base):
     icon_emoji: Mapped[str | None] = mapped_column(String(16), default=None)
     media_count: Mapped[int] = mapped_column(Integer, default=0)
     last_synced_at: Mapped[datetime | None] = mapped_column(UTCDateTime, default=None)
+    # Индексатор читает историю темы от новых сообщений к старым и после перезапуска продолжает
+    # с того места, где остановился, а не с начала.
+    history_complete: Mapped[bool] = mapped_column(default=False, server_default=text("0"))
+    oldest_message_id: Mapped[int | None] = mapped_column(Integer, default=None)
 
 
 class TgMedia(Base):
@@ -404,6 +408,8 @@ class TgMedia(Base):
     size_bytes: Mapped[int | None] = mapped_column(BigInteger, default=None)
     duration_sec: Mapped[float | None] = mapped_column(Float, default=None)
     caption: Mapped[str | None] = mapped_column(Text, default=None)
+    file_name: Mapped[str | None] = mapped_column(String(500), default=None)  # имя файла в Telegram
+    url: Mapped[str | None] = mapped_column(String(2000), default=None)  # у ссылок из текста
     author_name: Mapped[str | None] = mapped_column(String(200), default=None)
     author_tg_id: Mapped[int | None] = mapped_column(BigInteger, default=None)
     posted_at: Mapped[datetime] = mapped_column(UTCDateTime)

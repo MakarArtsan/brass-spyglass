@@ -14,7 +14,7 @@ const focus =
 export function MediaTile({ data }: { data: DashboardData['media'] }) {
   const { storage } = data
   return (
-    <Tile title={ru.dash.media} to="/library">
+    <Tile title={ru.dash.media} to="/media">
       <div className="flex items-baseline justify-between gap-3">
         <span className="mono text-3xl font-semibold">{data.total}</span>
         <span className="text-xs text-fog">{ru.dash.mediaFromTelegram(data.from_telegram)}</span>
@@ -101,7 +101,7 @@ function entityLink(type: string, id: number | null): string {
     case 'shot': return `/shots?shot=${id}`
     case 'scene': return `/scenes/${id}`
     case 'asset': return `/assets?asset=${id}`
-    case 'file': return `/library?file=${id}`
+    case 'file': return `/media?file=${id}`
     case 'setup_payoff': return '/setups'
     case 'sound_cue': return '/sound'
     case 'task': return '/tasks'
@@ -194,7 +194,7 @@ export function ContributionTile({
             if (!person) return null
             return (
               <li key={row.user_id}>
-                <Link to={`/library?author=${row.user_id}`} className={cn(focus, 'flex min-h-[44px] items-center gap-3 rounded-lg px-1 transition-colors hover:bg-ink/60')}>
+                <Link to={`/media?author=${row.user_id}`} className={cn(focus, 'flex min-h-[44px] items-center gap-3 rounded-lg px-1 transition-colors hover:bg-ink/60')}>
                   <Avatar user={person} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium">{person.name}</span>
