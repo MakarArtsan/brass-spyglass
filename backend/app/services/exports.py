@@ -84,6 +84,7 @@ def load_plan(
     media_root: str = "",
     base_url: str = "",
     target: str = ExportTarget.RESOLVE.value,
+    use_files: bool = True,
 ) -> Plan:
     project = projects.get_project(db)
     if project is None:
@@ -102,8 +103,8 @@ def load_plan(
             .order_by(models.Shot.order, models.Shot.id)
         )
     )
-    scene_files = finals.resolve(db, scenes)
-    shot_files = finals.resolve(db, shots)
+    scene_files = finals.resolve(db, scenes) if use_files else {}
+    shot_files = finals.resolve(db, shots) if use_files else {}
     scene_x = [
         SceneX(
             s.id, s.number, s.title, s.order, s.status, s.planned_sec, _ref(scene_files.get(s.id))

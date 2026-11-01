@@ -77,6 +77,7 @@ class Batch {
       void qc.invalidateQueries({ queryKey: ['library'] })
       void qc.invalidateQueries({ queryKey: ['tg'] })
     }
+    if (dirty.has('export')) void qc.invalidateQueries({ queryKey: ['exports'] })
     if (dirty.has('comment')) void qc.invalidateQueries({ queryKey: ['comments'] })
     if (dirty.has('tg')) void qc.invalidateQueries({ queryKey: ['tg'] })
     if (dirty.has('project')) void qc.invalidateQueries({ queryKey: ['project'] })
@@ -126,6 +127,7 @@ export function useLiveUpdates(enabled: boolean): void {
         else if (event.type === 'job') {
           jobListeners.forEach((listener) => listener(event))
           if (event.job_type === 'tg_import') batch.add('tg')
+          if (event.job_type === 'export') batch.add('export')
           if (event.status === 'done' || event.status === 'failed') batch.add('files')
         }
       }

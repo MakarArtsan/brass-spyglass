@@ -4,7 +4,7 @@
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -128,6 +128,21 @@ def _history(db: Session) -> list[dict[str, Any]]:
     }
     people = serialize.authors(db, {r.created_by for r in rows})
     return [_item(r, jobs_by_id.get(r.job_id) if r.job_id else None, people) for r in rows]
+
+
+@router.get("/subtitles.srt")
+def subtitles_srt(db: DbDep, _: ExportActor) -> Response:
+    """«Экспорт субтитров» с экрана «Звук»: английские реплики с таймкодами по таймлайну трекера
+    (порядок и длительности сцен из трекера, без учёта того, какие файлы уже готовы)."""
+    plan = exports.load_plan(
+        db, get_settings(), level=Level.SCENES, placeholders=True, references=False, use_files=False
+    )
+    text = ep.format_srt(plan.spec.subtitles, plan.spec.fps)
+    return Response(
+        text,
+        media_type="application/x-subrip; charset=utf-8",
+        headers={"Content-Disposition": "attachment; filename=subtitles_en.srt"},
+    )
 
 
 @router.get("/exports")

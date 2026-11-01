@@ -224,3 +224,19 @@ def test_a_download_of_a_foreign_origin_post_is_blocked(api):
         "/api/exports", json={"target": "resolve"}, headers={"Origin": "https://evil.example"}
     )
     assert response.status_code == 403
+
+
+def test_the_sound_screen_exports_english_subtitles_by_the_tracker_timeline(api):
+    response = api.get("/api/subtitles.srt")
+    assert response.status_code == 200
+    assert "attachment" in response.headers["content-disposition"]
+    text = response.text
+    assert text.startswith("1\n00:00:") and "We are poor. But they? Look how they shine!" in text
+    blocks = [b for b in text.strip().split("\n\n") if b]
+    assert len(blocks) >= 5  # реплики из листа «Звук» с английским текстом
+    assert "Милорд" not in text  # только английский
+
+
+def test_subtitles_need_the_export_right(api):
+    login(api, "guest", "Гость")
+    assert api.get("/api/subtitles.srt").status_code == 403

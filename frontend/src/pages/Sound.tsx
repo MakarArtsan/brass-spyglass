@@ -1,10 +1,11 @@
-import { Plus } from 'lucide-react'
+import { Download, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { FilterChips } from '@/components/Chips'
 import { EditableSelect, EditableText } from '@/components/Editable'
 import { PageHeader } from '@/components/PageHeader'
 import { StatusPill } from '@/components/StatusPill'
 import { Button } from '@/components/ui/button'
+import { useMe } from '@/hooks/useAuth'
 import { useIsDesktop } from '@/hooks/useMediaQuery'
 import { usePerms } from '@/hooks/usePerms'
 import { useCreate, useMeta, useShots, useSounds, useUpdate } from '@/lib/queries'
@@ -62,6 +63,7 @@ export default function Sound() {
   const update = useUpdate<SoundCue>('sound')
   const [types, setTypes] = useState<string[]>([])
   const [adding, setAdding] = useState(false)
+  const canExport = useMe().data?.abilities.export ?? false
 
   const visible = (cues ?? []).filter((c) => types.length === 0 || types.includes(c.type))
   const typeOptions = (meta?.sound_type ?? []).map((t) => ({ value: t, label: ru.soundType[t as keyof typeof ru.soundType] }))
@@ -85,12 +87,22 @@ export default function Sound() {
         title={ru.sound.title}
         lead={ru.sound.lead}
         actions={
-          perms.canCreate && (
-            <Button type="button" variant="outline" onClick={() => setAdding((v) => !v)}>
-              <Plus size={18} />
-              {ru.sound.addCue}
-            </Button>
-          )
+          <div className="flex flex-wrap gap-2">
+            {canExport && (
+              <Button asChild variant="outline">
+                <a href="/api/subtitles.srt" download>
+                  <Download size={18} aria-hidden />
+                  {ru.exportPage.subtitlesButton}
+                </a>
+              </Button>
+            )}
+            {perms.canCreate && (
+              <Button type="button" variant="outline" onClick={() => setAdding((v) => !v)}>
+                <Plus size={18} />
+                {ru.sound.addCue}
+              </Button>
+            )}
+          </div>
         }
       />
       {adding && <NewCue cues={cues} onDone={() => setAdding(false)} />}
