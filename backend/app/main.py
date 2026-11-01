@@ -13,8 +13,8 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.types import ASGIApp, Receive, Scope, Send
 
+from app import backup, events, uploads
 from app import db as database
-from app import events, uploads
 from app.api import animatic, dashboard, entities, health, me
 from app.api import auth as auth_api
 from app.api import events as events_api
@@ -24,6 +24,7 @@ from app.api import telegram as telegram_api
 from app.auth.telegram import TelegramService
 from app.auth.tokens import LoginTokenStore
 from app.config import Settings, get_settings
+from app.maintenance import Maintenance
 from app.migrate import upgrade_to_head
 from app.permissions import PermissionDenied
 from app.services import projects, seed
@@ -101,9 +102,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.tg = TelegramService(settings, app.state.tokens)
     await app.state.tg.start()
     indexer = await _start_indexer(app, settings)
+    backup.loop = asyncio.get_running_loop()
+    backup.sender = app.state.tg.send_to_owner if app.state.tg.bot is not None else None
+    maintenance = Maintenance(settings, app.state.jobs.wake)
+    await maintenance.start()
     try:
         yield
     finally:
+        await maintenance.stop()
+        backup.sender = None
         if indexer is not None:
             await indexer.stop()
         telegram_runtime.reset()

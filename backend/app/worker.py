@@ -139,7 +139,15 @@ def _export(db: Session, job: models.Job, settings: Settings) -> None:
     exports.run(export_id, job_id, settings)
 
 
+def _backup(db: Session, job: models.Job, settings: Settings) -> None:
+    from app import backup
+
+    db.rollback()
+    backup.run(settings)
+
+
 HANDLERS: dict[str, Callable[[Session, models.Job, Settings], None]] = {
+    JobType.BACKUP.value: _backup,
     JobType.EXPORT.value: _export,
     JobType.TG_IMPORT.value: _tg_import,
     JobType.PREVIEW.value: _preview,
