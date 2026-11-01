@@ -279,6 +279,22 @@ test.describe('экран «Telegram»', () => {
     await expect(page.getByText(/TG_SESSION и TG_CHAT_ID/)).toBeVisible()
   })
 
+  test('юзербот настроен, но не подключился: на экране видна причина', async ({ page, asRole }) => {
+    await asRole('owner')
+    await mockTelegram(page)
+    const reason = 'Одну и ту же сессию использовали с двух мест одновременно, и Telegram её аннулировал. Выпустите новую (make_session.py).'
+    await page.route((url) => url.pathname === '/api/tg/status', (route) =>
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ configured: true, connected: false, userbot_error: reason, chat_id: -1001234567890, syncing: false, phase: 'idle', topic: null, thumbs_left: 0, last_error: null, last_run_at: null, overview: null }),
+      }),
+    )
+    await page.route((url) => url.pathname === '/api/tg/topics', (route) => route.fulfill({ contentType: 'application/json', body: '[]' }))
+    await page.goto('/telegram')
+    await expect(page.getByText('Не подключён')).toBeVisible()
+    await expect(page.getByRole('alert').filter({ hasText: 'Причина:' })).toContainText('с двух мест одновременно')
+  })
+
   test('гостю экран не показывается', async ({ page, asRole }) => {
     await asRole('guest')
     await page.goto('/telegram')

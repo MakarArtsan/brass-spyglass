@@ -75,7 +75,7 @@ def _item(row: models.TgMedia) -> dict[str, Any]:
 
 
 @router.get("/status")
-def tg_status(db: DbDep) -> dict[str, Any]:
+def tg_status(db: DbDep, request: Request) -> dict[str, Any]:
     settings = get_settings()
     indexer = runtime.indexer
     state = indexer.state if indexer else None
@@ -83,6 +83,7 @@ def tg_status(db: DbDep) -> dict[str, Any]:
     return {
         "configured": bool(settings.tg_session and settings.tg_chat_id is not None),
         "connected": runtime.gateway is not None,
+        "userbot_error": getattr(request.app.state.tg, "userbot_error", None),
         "chat_id": settings.tg_chat_id,
         "syncing": bool(state and state.running),
         "phase": state.phase if state else "idle",

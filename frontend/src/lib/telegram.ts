@@ -40,6 +40,8 @@ export interface TgMediaPage {
 export interface TgStatus {
   configured: boolean
   connected: boolean
+  /** Почему юзербот не подключился (по-русски, с тем, что делать). */
+  userbot_error: string | null
   chat_id: number | null
   syncing: boolean
   phase: string
