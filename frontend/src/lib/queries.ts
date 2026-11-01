@@ -185,9 +185,18 @@ export function useDelete(resource: Resource) {
     onError: (_e, _id, ctx) => {
       if (ctx?.previous) qc.setQueryData([resource], ctx.previous)
     },
-    onSettled: () => invalidateResource(qc, resource),
+    onSuccess: (_data, id) => {
+      // карточка удалённого больше не существует: не перечитываем её (иначе 404 и три повтора с паузами)
+      const detail = DETAIL_KEY[resource]
+      if (detail) qc.removeQueries({ queryKey: [detail, id] })
+    },
+    // Без `return`: мутация не должна ждать перечитывания списков, иначе «готово» приходит с задержкой.
+    onSettled: () => void invalidateResource(qc, resource),
   })
 }
+
+/** Ключ запроса карточки у тех ресурсов, где она грузится отдельно. */
+const DETAIL_KEY: Partial<Record<Resource, string>> = { shots: 'shot', assets: 'asset' }
 
 const ENTITY_RESOURCE = { scene: 'scenes', shot: 'shots', asset: 'assets', setup_payoff: 'setups', sound_cue: 'sound', task: 'tasks' } as const
 

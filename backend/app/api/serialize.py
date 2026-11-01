@@ -135,7 +135,7 @@ def shots_out(db: Session, shots: list[models.Shot]) -> list[dict[str, Any]]:
         )
         .join(models.Asset, models.Asset.id == models.ShotAsset.asset_id)
         .outerjoin(models.AssetState, models.AssetState.id == models.ShotAsset.asset_state_id)
-        .where(models.ShotAsset.shot_id.in_(ids))
+        .where(models.ShotAsset.shot_id.in_(ids), models.Asset.deleted_at.is_(None))
         .order_by(models.ShotAsset.id)
     ):
         links[shot_id].append(

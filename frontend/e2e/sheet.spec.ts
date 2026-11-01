@@ -48,3 +48,26 @@ test.describe('карточка после перехода внутри при�
     await expect.poll(() => scroller.evaluate((el) => el.scrollTop)).toBeGreaterThan(100)
   })
 })
+
+test.describe('низ карточки на телефоне', () => {
+  test.beforeEach(async ({ asRole }) => asRole('owner'))
+
+  test('последний элемент карточки не прячется под нижней панелью навигации', async ({ page, isMobile }) => {
+    test.skip(!isMobile, 'нижняя панель только на телефоне')
+    await page.goto('/shots?shot=1')
+    const sheet = page.getByRole('dialog')
+    await expect(sheet).toBeVisible()
+    await page.waitForTimeout(700)
+    const scroller = sheet.locator('div.overflow-y-auto').first()
+    await scroller.evaluate((el) => el.scrollTo({ top: el.scrollHeight }))
+    await page.waitForTimeout(300)
+    const covered = await page.evaluate(() => {
+      const sc = document.querySelector('[role=dialog][aria-modal=true] div.overflow-y-auto')!
+      const last = sc.lastElementChild!.lastElementChild ?? sc.lastElementChild!
+      const r = last.getBoundingClientRect()
+      const nav = document.querySelector('nav.fixed')!.getBoundingClientRect()
+      return r.bottom > nav.top + 1 // нижний край последнего блока заходит на панель
+    })
+    expect(covered).toBe(false)
+  })
+})

@@ -8,8 +8,10 @@ import { FilesSection } from '@/components/media/FilesSection'
 import { Field, Section } from '@/components/Section'
 import { StatusPill } from '@/components/StatusPill'
 import { Button } from '@/components/ui/button'
+import { usePanelParam } from '@/hooks/usePanelParam'
 import { usePerms } from '@/hooks/usePerms'
-import { useAsset, useAssetStates, useMeta, useUpdate } from '@/lib/queries'
+import { useAsset, useAssetStates, useDelete, useMeta, useUpdate } from '@/lib/queries'
+import { toast } from '@/lib/toast'
 import type { Asset, StatusKey } from '@/lib/types'
 import { ru } from '@/ru'
 
@@ -37,6 +39,8 @@ export function AssetCard({ assetId }: { assetId: number }) {
   const perms = usePerms()
   const update = useUpdate<Asset>('assets')
   const states = useAssetStates(assetId)
+  const remove = useDelete('assets')
+  const [, setOpenId] = usePanelParam('asset')
   const [newState, setNewState] = useState('')
 
   if (!asset) return <p className="p-4 text-sm text-fog">{ru.common.loading}</p>
@@ -148,6 +152,32 @@ export function AssetCard({ assetId }: { assetId: number }) {
 
       <Comments entityType="asset" entityId={asset.id} />
       <History entityType="asset" entityId={asset.id} />
+
+      {perms.canDelete(asset) && (
+        <div className="border-t border-line pt-4">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={remove.isPending}
+            className="border-alert/50 text-alert hover:border-alert hover:text-alert"
+            onClick={async () => {
+              if (!window.confirm(ru.assets.deleteConfirm(asset.code, asset.name))) return
+              // mutateAsync, а не колбэки mutate(): ассет исчезает из списка сразу, и карточка успевает
+              // перерисоваться раньше, чем сервер ответит, — колбэки при этом не вызываются.
+              try {
+                await remove.mutateAsync(asset.id)
+                toast(ru.assets.deleted(asset.code))
+                setOpenId(null)
+              } catch {
+                toast(ru.common.saveFailed)
+              }
+            }}
+          >
+            <Trash2 size={16} aria-hidden />
+            {ru.assets.deleteAsset}
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

@@ -92,7 +92,8 @@ export function CardPanel({ open, onClose, title, actions, children }: Props) {
               <span aria-hidden className="mx-auto mt-2 block h-1 w-10 rounded-full bg-line" />
               {header}
             </fm.div>
-            <div className="flex-1 overflow-y-auto overscroll-contain">{children}</div>
+            {/* pb-16: нижняя панель навигации лежит поверх листа, без отступа её высоты последние элементы карточки оказываются под ней */}
+            <div className="flex-1 overflow-y-auto overscroll-contain pb-16">{children}</div>
           </fm.div>
         ))}
     </AnimatePresence>
