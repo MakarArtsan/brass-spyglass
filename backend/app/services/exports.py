@@ -408,6 +408,11 @@ def cleanup(settings: Settings, now: datetime | None = None) -> int:
                 shutil.rmtree(leftover, ignore_errors=True)
             elif leftover.suffix == ".part":
                 leftover.unlink(missing_ok=True)
+    with database.session_factory()() as db:
+        from app.services import notifications
+
+        notifications.prune(db, now)
+        db.commit()
     return removed
 
 

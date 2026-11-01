@@ -12,9 +12,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app import models, permissions
-from app.constants import EntityType, FileKind
+from app.constants import EntityType, FileKind, NotificationKind
 from app.permissions import Actor
-from app.services import core, files, links
+from app.services import core, files, links, notifications
 from app.services.core import ConflictError, ValidationError, log_activity
 
 
@@ -180,3 +180,12 @@ def _announce(
     for row in _targets(db, file.id):
         links.sync_takes(db, row.entity_type, row.entity_id)
         log_activity(db, actor.id, action, row.entity_type, row.entity_id, payload, file.project_id)
+        if action == "version":  # откат — не новость для команды, новая версия — да
+            notifications.notify(
+                db,
+                actor.id,
+                NotificationKind.VERSION,
+                row.entity_type,
+                row.entity_id,
+                f"{file.original_name} · v{file.version_no}",
+            )

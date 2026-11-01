@@ -4,9 +4,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app import models, permissions
-from app.constants import EntityType, Purpose
+from app.constants import EntityType, NotificationKind, Purpose
 from app.permissions import Actor
-from app.services import core
+from app.services import core, notifications
 from app.services.core import ConflictError, NotFoundError, ValidationError, log_activity
 
 
@@ -167,6 +167,14 @@ def attach(
         entity_id,
         {"file_id": file_id, "file": file.original_name, "purpose": purpose},  # type: ignore[attr-defined]
         getattr(target, "project_id", None) or file.project_id,  # type: ignore[attr-defined]
+    )
+    notifications.notify(
+        db,
+        actor.id,
+        NotificationKind.FILE,
+        entity_type,
+        entity_id,
+        file.original_name or file.url,  # type: ignore[attr-defined]
     )
     return row
 

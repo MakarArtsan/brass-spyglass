@@ -210,6 +210,14 @@ class JobType(StrEnum):
     BACKUP = "backup"
 
 
+class NotificationKind(StrEnum):
+    """Что произошло на карточке: комментарий, добавленный файл, новая версия файла."""
+
+    COMMENT = "comment"
+    FILE = "file"
+    VERSION = "version"
+
+
 class JobStatus(StrEnum):
     QUEUED = "queued"
     RUNNING = "running"
