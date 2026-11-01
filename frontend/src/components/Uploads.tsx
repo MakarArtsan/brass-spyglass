@@ -1,5 +1,4 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { AnimatePresence, motion as fm } from 'framer-motion'
 import { Camera, Check, Loader2, Plus, TriangleAlert, X } from 'lucide-react'
 import {
   createContext,
@@ -13,7 +12,6 @@ import {
   Suspense,
   type ReactNode,
 } from 'react'
-import { motion } from '@/brand'
 import { Button } from '@/components/ui/button'
 import { usePerms } from '@/hooks/usePerms'
 import { keys } from '@/lib/queries'
@@ -206,10 +204,14 @@ export function UploadProvider({ children }: { children: ReactNode }) {
   )
 }
 
+// Подсветка при перетаскивании (framer-motion) — отдельный чанк, грузится при первом перетаскивании.
+const DropOverlay = lazy(() => import('@/components/DropOverlay'))
+
 /** Перетаскивание файлов с компьютера: подсвечивает зону под курсором и принимает бросок. */
 function DropLayer({ onDrop }: { onDrop: Api['upload'] }) {
   const [dragging, setDragging] = useState(false)
   const [overZone, setOverZone] = useState(false)
+  const [seen, setSeen] = useState(false) // после первого перетаскивания оверлей остаётся для плавного ухода
   const depth = useRef(0)
   const active = useRef<Element | null>(null)
 
@@ -227,6 +229,7 @@ function DropLayer({ onDrop }: { onDrop: Api['upload'] }) {
       if (!hasFiles(e)) return
       e.preventDefault()
       depth.current += 1
+      setSeen(true)
       setDragging(true)
     }
     const over = (e: DragEvent) => {
@@ -269,24 +272,11 @@ function DropLayer({ onDrop }: { onDrop: Api['upload'] }) {
     }
   }, [onDrop])
 
-  return (
-    <AnimatePresence>
-      {dragging && (
-        <fm.div
-          aria-hidden
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: motion.fast }}
-          className="pointer-events-none fixed inset-2 z-[60] flex items-start justify-center rounded-2xl border-2 border-dashed border-brass bg-brass/5"
-        >
-          <span className="mt-6 rounded-full border border-brass bg-chart px-5 py-2 text-sm font-semibold text-brass-light">
-            {overZone ? ru.files.drop : ru.files.dropHint}
-          </span>
-        </fm.div>
-      )}
-    </AnimatePresence>
-  )
+  return seen ? (
+    <Suspense fallback={null}>
+      <DropOverlay dragging={dragging} overZone={overZone} />
+    </Suspense>
+  ) : null
 }
 
 function Tray({ items, onCancel }: { items: Item[]; onCancel: (i: Item) => void }) {

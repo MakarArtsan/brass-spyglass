@@ -7,12 +7,42 @@ export class ApiError extends Error {
   }
 }
 
-export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(`/api${path}`, {
+declare global {
+  interface Window {
+    /** Запросы, которые index.html запустил до загрузки скриптов (ключ — путь без /api). */
+    __early?: Record<string, Promise<Response> | undefined>
+  }
+}
+
+/** Ответ на ранний запрос отдаётся один раз и только для GET; дальше запросы идут как обычно. */
+function takeEarly(path: string, init: RequestInit): Promise<Response> | undefined {
+  const early = window.__early
+  if (!early || (init.method ?? 'GET') !== 'GET') return undefined
+  const hit = early[path]
+  delete early[path]
+  return hit
+}
+
+function send(path: string, init: RequestInit): Promise<Response> {
+  return fetch(`/api${path}`, {
     credentials: 'same-origin',
     ...init,
     headers: { ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...init.headers },
   })
+}
+
+export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const early = takeEarly(path, init)
+  let res: Response
+  if (early) {
+    try {
+      res = await early
+    } catch {
+      res = await send(path, init) // ранний запрос не дошёл — повторяем обычным
+    }
+  } else {
+    res = await send(path, init)
+  }
   if (!res.ok) {
     let detail = res.statusText
     try {

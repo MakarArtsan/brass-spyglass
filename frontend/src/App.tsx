@@ -6,15 +6,16 @@ import { useMe } from '@/hooks/useAuth'
 import { ApiError } from '@/lib/api'
 import { NAV } from '@/nav'
 import { ru } from '@/ru'
-import Dashboard from '@/pages/Dashboard'
 import Login from '@/pages/Login'
 import NotFound from '@/pages/NotFound'
 import Placeholder from '@/pages/Placeholder'
+import Dashboard from '@/pages/Dashboard'
 
 // Страницы грузятся по требованию: на дашборде и экране входа не нужны dnd-kit, wavesurfer и т. д.
 const Assets = lazy(() => import('@/pages/Assets'))
 const Brand = lazy(() => import('@/pages/Brand'))
 const Journal = lazy(() => import('@/pages/Journal'))
+const Media = lazy(() => import('@/pages/Media'))
 const SceneDetail = lazy(() => import('@/pages/SceneDetail'))
 const Scenes = lazy(() => import('@/pages/Scenes'))
 const Setups = lazy(() => import('@/pages/Setups'))
@@ -22,11 +23,14 @@ const Shots = lazy(() => import('@/pages/Shots'))
 const Sound = lazy(() => import('@/pages/Sound'))
 const Tasks = lazy(() => import('@/pages/Tasks'))
 const Team = lazy(() => import('@/pages/Team'))
+const Telegram = lazy(() => import('@/pages/Telegram'))
 
 const IMPLEMENTED: Record<string, JSX.Element> = {
   '/': <Dashboard />,
   '/scenes': <Scenes />,
   '/shots': <Shots />,
+  '/media': <Media />,
+  '/telegram': <Telegram />,
   '/assets': <Assets />,
   '/setups': <Setups />,
   '/sound': <Sound />,

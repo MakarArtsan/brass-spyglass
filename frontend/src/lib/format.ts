@@ -47,3 +47,19 @@ export function daysUntil(date: string, now = new Date()): number {
 
 export const num = (value: number | null | undefined): string =>
   value == null ? ru.common.dash : String(Math.round(value * 100) / 100)
+
+/** Русские числительные: plural(2, 'день', 'дня', 'дней') → «дня». */
+export function plural(n: number, one: string, few: string, many: string): string {
+  const mod10 = n % 10
+  const mod100 = n % 100
+  if (mod10 === 1 && mod100 !== 11) return one
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return few
+  return many
+}
+
+/** Гигабайты с одним знаком: 1.5 ГБ; меньше 0,1 ГБ — в мегабайтах. */
+export function formatGiB(bytes: number): string {
+  const gib = bytes / 1024 ** 3
+  if (gib < 0.1) return `${Math.round(bytes / 1024 ** 2)} МБ`
+  return `${(Math.round(gib * 10) / 10).toString().replace('.', ',')} ГБ`
+}

@@ -1,12 +1,13 @@
 import * as Dropdown from '@radix-ui/react-dropdown-menu'
-import { AudioLines, FileText, Film, Image as ImageIcon, Loader2, MoreVertical, TriangleAlert } from 'lucide-react'
+import { AudioLines, FileText, Film, Image as ImageIcon, Link2, Loader2, MoreVertical, TriangleAlert } from 'lucide-react'
 import { Lens } from '@/components/Lens'
+import { displayName } from '@/lib/files'
 import { clock, formatDateTime } from '@/lib/format'
 import type { Attached } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { ru } from '@/ru'
 
-const icons = { video: Film, image: ImageIcon, audio: AudioLines, document: FileText, link: FileText } as const
+const icons = { video: Film, image: ImageIcon, audio: AudioLines, document: FileText, link: Link2 } as const
 
 interface Props {
   item: Attached
@@ -19,7 +20,7 @@ interface Props {
 export function FileTile({ item, onOpen, onDetach, onDelete }: Props) {
   const { file } = item
   const Icon = icons[file.kind]
-  const name = file.original_name ?? `#${file.id}`
+  const name = displayName(file)
   return (
     <div className="group relative flex w-[104px] flex-col items-center gap-1.5">
       <button

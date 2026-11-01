@@ -54,18 +54,25 @@ backend/app/
   models.py                 вся схема данных (SQLAlchemy 2)
   db.py                     SQLite в режиме WAL, UTCDateTime (наивное время запрещено)
   permissions.py            матрица ролей из ТЗ — единственное место
-  metrics.py                вычисляемое: таймкоды сцен/шотов, суммы, проверки согласованности (с тестами)
+  metrics.py                вычисляемое: таймкоды, суммы, готовность, дашборд, сгорание (с тестами)
+  events.py                 шина событий SSE: события копятся в сессии и уходят после коммита
+  storage.py                занятое место на /data, лимит проекта (`ensure_room` — отказ при нехватке)
+  linkpreview.py            карточка ссылки (Open Graph) с защитой от SSRF
+  tg/                       Telegram: types (Gateway), telethon_gateway (ЕДИНСТВЕННОЕ место с типами
+                            Telethon), parse, limiter (1 запрос/с, FloodWait), indexer, importer, previews
   xlsx_reader.py            чтение Excel-трекера по заголовкам колонок → Bundle (без записи в БД)
   services/                 ЕДИНСТВЕННОЕ место записи в БД; каждое изменение пишет `activity`
     core.py                 общие операции: создание/правка/удаление/смена статуса, журнал
     importing.py, seed.py   запись Bundle из Excel; автоимпорт сида на пустой БД
     ordering.py, links.py   порядок сцен/шотов; привязки шот↔ассет и файл↔карточка
-    files.py, jobs.py       файлы (дубли по sha256, метаданные) и очередь фоновых задач
+    files.py, jobs.py       файлы (дубли по sha256, метаданные, ссылки) и очередь фоновых задач
+    telegram.py             индекс чата и импорт выбранного в карточки (вся запись в БД по Telegram)
   uploads.py                загрузка кусками с докачкой: состояние на диске (/data/cache/uploads)
   media.py, worker.py       ffprobe/ffmpeg/Pillow: превью, прокси H.264 720p, волна; исполнитель очереди
   signing.py                подписанные ссылки на файлы (TTL 1 ч)
   auth/                     вход: токены, бот и юзербот (Telethon), сессия-cookie, Login Widget
-  api/                      роутеры FastAPI: entities.py (сущности), files.py (загрузка/раздача), serialize.py
+  api/                      роутеры FastAPI: entities, files (загрузка, медиатека, ссылки), dashboard,
+                            events (SSE), telegram (окно «Добавить из Telegram»), serialize
   main.py                   lifespan: миграции → проект → сид → Telegram → воркер; раздача React
 backend/seed/               Krivoe_zerkalo_tracker.xlsx — стартовые данные
 backend/scripts/            import_xlsx.py, dev_session.py, make_session.py
@@ -76,8 +83,10 @@ frontend/src/
   ru.ts                     ВСЕ строки интерфейса
   lib/                      types, queries (TanStack Query + оптимистичные обновления), uploader, format, toast
   hooks/                    usePerms (только прячет кнопки — права проверяет сервер), usePanelParam
-  components/               StatusPill, CardPanel, Comments, History, Uploads, … ; media/ — плееры и просмотрщик
-  pages/                    Shots, Scenes, SceneDetail, Assets, Setups, Sound, Tasks, Journal (lazy-маршруты)
+  components/               StatusPill, CardPanel, Comments, Uploads, … ; media/ — плееры и медиатека;
+                            dashboard/ — виджеты на SVG; telegram/ — окно импорта и прогресс
+  pages/                    Shots, Scenes, Assets, Setups, Sound, Tasks, Media, Telegram, Journal, Dashboard
+                            (+ DashboardTiles — ленивый чанк графиков)
 frontend/e2e/               Playwright (desktop 1440 + phone 390); fixtures.ts, screenshots.mjs
 ```
 
@@ -98,6 +107,16 @@ frontend/e2e/               Playwright (desktop 1440 + phone 390); fixtures.ts, 
   проверка в сервисе, а не в роутере, и на неё есть тест.
 - **Загрузка**: свой протокол докачки (`POST /api/uploads` → `PATCH` с `Upload-Offset` → `complete`),
   кусок ≤ 16 МБ (`UPLOAD_CHUNK_MB`), файл ≤ 4 ГБ. После перезапуска незавершённые загрузки продолжаются.
+  Новая загрузка и импорт не принимаются, если не помещаются в лимит диска (`storage.ensure_room`, 507).
+- **Telegram.** Типы Telethon не выходят за `tg/telethon_gateway.py`; индексатор, сервисы и тесты работают
+  с `tg/types.py` и подставным шлюзом (`tests/fake_telegram.py`). Все запросы к Telegram — через
+  `RateLimiter` (≤ 1/с, FloodWait). Файлы качаются по одному. `/api/tg/*` — только не-гость.
+- **SSE.** Событие создаётся в `log_activity`/`jobs`, уходит подписчикам из `after_commit`, откат его отбрасывает.
+  Клиент (`lib/live.ts`) перечитывает изменённое; в событии данных нет.
+- **Поиск без учёта регистра** — только через `db.ci_contains` (SQLite не приводит регистр кириллицы).
+- **Фронтенд, скорость первого показа** (критерий Lighthouse ≥ 90 на дашборде): запросы стартуют из
+  `index.html` (`window.__early`), тяжёлое под сгибом — в `Deferred`/ленивых чанках, в компонентах
+  `m` из `framer-motion`, а не `motion`; не добавлять тяжёлые библиотеки в начальный набор.
 - **Фоновые задачи** — таблица `job` в той же БД, исполнитель `worker.py` (≤ 2 ffmpeg одновременно);
   «зависшие» задачи после перезапуска возвращаются в очередь.
 - **Удаление мягкое** (`deleted_at`), корзина 30 дней, восстанавливает владелец.

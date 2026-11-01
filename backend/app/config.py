@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     file_link_ttl_sec: int = 3600  # срок жизни подписанных ссылок на файлы
     # Размер куска при загрузке. Если вход Amvera режет тело запроса (413), поставьте 1.
     upload_chunk_mb: int = 8
+    # Кэш просмотра не скачанных файлов Telegram: старые файлы удаляются, когда кэш больше этого.
+    tg_preview_cache_mb: int = 500
     membership_recheck_hours: int = 24
 
     @computed_field  # type: ignore[prop-decorator]
@@ -43,6 +45,18 @@ class Settings(BaseSettings):
         if self.seed_xlsx is None:
             return Path(__file__).resolve().parent.parent / "seed" / "Krivoe_zerkalo_tracker.xlsx"
         return Path(self.seed_xlsx) if self.seed_xlsx else None
+
+    @property
+    def tg_thumbs_dir(self) -> Path:
+        return self.cache_dir / "tg-thumbs"
+
+    @property
+    def tg_view_dir(self) -> Path:
+        return self.cache_dir / "tg-view"
+
+    @property
+    def tg_tmp_dir(self) -> Path:
+        return self.cache_dir / "tg-tmp"
 
     @property
     def files_dir(self) -> Path:

@@ -2,6 +2,7 @@
 над файлами — ни БД, ни HTTP. Оригиналы не меняются: превью и прокси пишутся отдельно."""
 
 import array
+import io
 import json
 import math
 import re
@@ -235,3 +236,14 @@ def waveform(src: Path, duration: float | None, buckets: int = WAVE_BUCKETS) -> 
         raise MediaError("ffmpeg не смог прочитать звук")
     top = max(peaks, default=0) or 1
     return [round(p / top, 3) for p in peaks]
+
+
+def thumb_from_bytes(data: bytes, dest: Path) -> None:
+    """Превью 400 px из байтов (миниатюра Telegram); перекодируется, чужие байты не остаются."""
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with Image.open(io.BytesIO(data)) as source:
+            image = ImageOps.exif_transpose(source).convert("RGB")
+    except Exception as exc:
+        raise MediaError(f"Не удалось прочитать миниатюру: {exc}") from exc
+    _save_jpeg(image, dest, THUMB_PX)

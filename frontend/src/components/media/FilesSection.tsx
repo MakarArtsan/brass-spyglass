@@ -1,3 +1,4 @@
+import { Images, Link2, Send } from 'lucide-react'
 import { lazy, Suspense, useState } from 'react'
 import { FileTile } from '@/components/media/FileTile'
 import { dropZone, UploadButtons } from '@/components/Uploads'
@@ -7,6 +8,9 @@ import { cn } from '@/lib/utils'
 import { ru } from '@/ru'
 
 // Окно просмотра (плееры, wavesurfer) тяжёлое — грузим при первом открытии файла.
+const TelegramWindow = lazy(() => import('@/components/telegram/TelegramWindow'))
+const LibraryPicker = lazy(() => import('@/components/media/LibraryPicker'))
+const LinkDialog = lazy(() => import('@/components/media/LinkDialog'))
 const MediaViewer = lazy(() => import('@/components/media/MediaViewer').then((m) => ({ default: m.MediaViewer })))
 
 interface Props {
@@ -26,7 +30,17 @@ export function FilesSection({ title, entityType, entityId, purposes, uploadPurp
   const { data } = useEntityFiles(entityType, entityId)
   const mutations = useFileMutations(entityType, entityId)
   const [open, setOpen] = useState<number | null>(null)
+  const [dialog, setDialog] = useState<'library' | 'link' | 'telegram' | null>(null)
   const items = (data ?? []).filter((a) => purposes.includes(a.purpose))
+  // Ссылки открываются в новой вкладке, в окне просмотра листаются только файлы.
+  const viewable = items.filter((a) => a.file.kind !== 'link')
+  const openItem = (item: (typeof items)[number]) => {
+    if (item.file.kind === 'link') {
+      if (item.file.url) window.open(item.file.url, '_blank', 'noopener,noreferrer')
+      return
+    }
+    setOpen(viewable.indexOf(item))
+  }
   const zone = dropZone({ entityType, entityId, purpose: uploadPurpose })
 
   return (
@@ -34,16 +48,32 @@ export function FilesSection({ title, entityType, entityId, purposes, uploadPurp
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <h3 className="flex-1 font-sans text-xs font-semibold uppercase tracking-[0.14em] text-fog">{title}</h3>
         <UploadButtons target={{ entityType, entityId, purpose: uploadPurpose }} />
+        {perms.canUpload && (
+          <>
+            <button type="button" onClick={() => setDialog('telegram')} className="inline-flex min-h-touch items-center gap-1.5 rounded-lg border border-line px-3 text-sm text-fog hover:border-brass/60 hover:text-paper">
+              <Send size={16} aria-hidden />
+              {ru.tg.button}
+            </button>
+            <button type="button" onClick={() => setDialog('library')} className="inline-flex min-h-touch items-center gap-1.5 rounded-lg border border-line px-3 text-sm text-fog hover:border-brass/60 hover:text-paper">
+              <Images size={16} aria-hidden />
+              {ru.library.fromLibrary}
+            </button>
+            <button type="button" onClick={() => setDialog('link')} className="inline-flex min-h-touch items-center gap-1.5 rounded-lg border border-line px-3 text-sm text-fog hover:border-brass/60 hover:text-paper">
+              <Link2 size={16} aria-hidden />
+              {ru.link.title}
+            </button>
+          </>
+        )}
       </div>
       {items.length === 0 ? (
         <p className="py-3 text-center text-sm text-fog">{perms.canUpload ? ru.shots.dragFiles : ru.files.noFiles}</p>
       ) : (
         <div className="flex flex-wrap gap-3">
-          {items.map((a, i) => (
+          {items.map((a) => (
             <FileTile
               key={a.attachment_id}
               item={a}
-              onOpen={() => setOpen(i)}
+              onOpen={() => openItem(a)}
               onDetach={
                 perms.canUpload && (perms.meId === a.attached_by?.id || perms.role === 'owner' || perms.role === 'director')
                   ? () => mutations.detach.mutate(a.attachment_id)
@@ -60,7 +90,22 @@ export function FilesSection({ title, entityType, entityId, purposes, uploadPurp
       )}
       {open != null && (
         <Suspense fallback={null}>
-          <MediaViewer files={items.map((a) => a.file)} index={open} onIndex={setOpen} onClose={() => setOpen(null)} />
+          <MediaViewer files={viewable.map((a) => a.file)} index={open} onIndex={setOpen} onClose={() => setOpen(null)} />
+        </Suspense>
+      )}
+      {dialog === 'library' && (
+        <Suspense fallback={null}>
+          <LibraryPicker entityType={entityType} entityId={entityId} purpose={uploadPurpose} onClose={() => setDialog(null)} />
+        </Suspense>
+      )}
+      {dialog === 'telegram' && (
+        <Suspense fallback={null}>
+          <TelegramWindow entityType={entityType} entityId={entityId} purpose={uploadPurpose} onClose={() => setDialog(null)} />
+        </Suspense>
+      )}
+      {dialog === 'link' && (
+        <Suspense fallback={null}>
+          <LinkDialog target={{ entityType, entityId, purpose: uploadPurpose }} onClose={() => setDialog(null)} />
         </Suspense>
       )}
     </section>

@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy import func, inspect, select
 from sqlalchemy.orm import Session
 
-from app import metrics, models
+from app import metrics, models, tglinks
 from app.constants import EntityType
 from app.signing import file_url
 
@@ -284,6 +284,7 @@ def entity_labels(db: Session, pairs: set[tuple[str, int | None]]) -> dict[tuple
     fill(EntityType.TASK, models.Task, lambda r: f"задача {r.code}")
     fill(EntityType.FILE, models.File, lambda r: f"файл {r.original_name or r.id}")
     fill(EntityType.USER, models.User, lambda r: f"участник {r.name}")
+    fill(EntityType.COMMENT, models.Comment, lambda r: "комментарий")
     return out
 
 
@@ -311,11 +312,37 @@ def file_urls(file: models.File) -> dict[str, str]:
     return urls
 
 
+def _topic_titles(db: Session, files: list[models.File]) -> dict[tuple[int, int], str]:
+    pairs = {(f.tg_chat_id, f.tg_topic_id) for f in files if f.tg_chat_id and f.tg_topic_id}
+    if not pairs:
+        return {}
+    rows = db.execute(
+        select(models.TgTopic.chat_id, models.TgTopic.topic_id, models.TgTopic.title).where(
+            models.TgTopic.chat_id.in_({chat for chat, _ in pairs})
+        )
+    )
+    return {(chat, topic): title for chat, topic, title in rows if (chat, topic) in pairs}
+
+
+def _tg_info(f: models.File, titles: dict[tuple[int, int], str]) -> dict[str, Any] | None:
+    """Откуда файл из Telegram: тема, автор сообщения в чате и ссылка «Открыть в Telegram»."""
+    if f.tg_message_id is None:
+        return None
+    return {
+        "topic_id": f.tg_topic_id,
+        "topic_title": titles.get((f.tg_chat_id or 0, f.tg_topic_id or 0)),
+        "message_id": f.tg_message_id,
+        "author": f.tg_author,
+        "url": tglinks.message_url(f.tg_chat_id, f.tg_topic_id, f.tg_message_id),
+    }
+
+
 def files_out(db: Session, files: list[models.File]) -> list[dict[str, Any]]:
     from app.services import jobs
 
     active, failed = jobs.file_activity(db, [f.id for f in files])
     uploaders = authors(db, {f.uploaded_by for f in files})
+    topic_titles = _topic_titles(db, files)
     out = []
     for f in files:
         out.append(
@@ -334,6 +361,9 @@ def files_out(db: Session, files: list[models.File]) -> list[dict[str, Any]]:
                 "ai_tool": f.ai_tool,
                 "ai_prompt": f.ai_prompt,
                 "ai_seed": f.ai_seed,
+                "url": f.url,
+                "link_title": f.link_title,
+                "tg": _tg_info(f, topic_titles),
                 "uploaded_at": f.uploaded_at,
                 "uploaded_by": uploaders.get(f.uploaded_by) if f.uploaded_by else None,
                 "processing": f.id in active,

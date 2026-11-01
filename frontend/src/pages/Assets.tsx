@@ -1,5 +1,7 @@
 import { Box, Drama, MapPin, PawPrint, Palette, Plus, Search, Ship, User, Users, Wind, type LucideIcon } from 'lucide-react'
 import { useState } from 'react'
+import { DashFilterBanner } from '@/components/DashFilterBanner'
+import { useDashFilter } from '@/hooks/useDashFilter'
 import { AssetCard, AssetCardTitle } from '@/components/AssetCard'
 import { CardPanel } from '@/components/CardPanel'
 import { FilterChips } from '@/components/Chips'
@@ -123,9 +125,14 @@ export default function Assets() {
   const [adding, setAdding] = useState(false)
   const [filtersOpen, setFiltersOpen] = useState(false)
 
+  const dash = useDashFilter()
   const q = query.trim().toLowerCase()
   const visible = (assets ?? []).filter(
-    (a) => (types.length === 0 || types.includes(a.type)) && (q === '' || a.code.toLowerCase().includes(q) || a.name.toLowerCase().includes(q)),
+    (a) =>
+      (types.length === 0 || types.includes(a.type)) &&
+      (dash.status === null || dash.status.includes(a.status)) &&
+      (!dash.orphans || (a.shots_count === 0 && a.status !== 'cut')) &&
+      (q === '' || a.code.toLowerCase().includes(q) || a.name.toLowerCase().includes(q)),
   )
   const compact = desktop && openId != null
 
@@ -143,6 +150,7 @@ export default function Assets() {
           )
         }
       />
+      <DashFilterBanner filter={dash} />
       {adding && <NewAsset onDone={() => setAdding(false)} />}
       <div className="mb-3 flex flex-wrap items-center gap-3">
         <label className="relative">

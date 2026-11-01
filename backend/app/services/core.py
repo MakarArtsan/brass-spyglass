@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app import models, permissions
 from app.constants import EntityType
 from app.db import utcnow
+from app.events import queue_event
 from app.permissions import Actor, PermissionDenied
 
 __all__ = [
@@ -210,6 +211,16 @@ def log_activity(
         diff=diff,
     )
     db.add(row)
+    queue_event(
+        db,
+        {
+            "type": "activity",
+            "action": action,
+            "entity_type": entity_type,
+            "entity_id": entity_id,
+            "actor_id": actor_id,
+        },
+    )
     return row
 
 

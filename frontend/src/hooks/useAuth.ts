@@ -13,7 +13,7 @@ export function useMe() {
 }
 
 export function useProject() {
-  return useQuery({ queryKey: ['project'], queryFn: () => api<Project>('/project') })
+  return useQuery({ queryKey: ['project'], queryFn: () => api<Project>('/project'), staleTime: 60_000 })
 }
 
 export function useUsers() {

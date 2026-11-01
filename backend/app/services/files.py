@@ -8,8 +8,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import models
-from app.constants import EntityType, FileKind, FileSource, JobType
+from app import linkpreview, models, permissions
+from app.constants import EntityType, FileKind, FileSource, JobType, Purpose
 from app.permissions import Actor
 from app.services import core, jobs
 
@@ -58,6 +58,8 @@ def store_upload(
     size_bytes: int,
     sha256: str,
     files_dir: Path,
+    source: FileSource = FileSource.UPLOAD,
+    extra: dict[str, Any] | None = None,
 ) -> models.File:
     """Создаёт запись файла (автор и время — от сервера, из сессии), переносит загруженное на
     постоянный диск и ставит задачу на превью. Оригинал дальше не меняется."""
@@ -70,11 +72,12 @@ def store_upload(
         EntityType.FILE,
         {
             "kind": kind.value,
-            "source": FileSource.UPLOAD.value,
+            "source": source.value,
             "original_name": original_name,
             "mime": mime,
             "size_bytes": size_bytes,
             "sha256": sha256,
+            **(extra or {}),
         },
         project_id=project_id,
     )
@@ -94,6 +97,7 @@ def store_upload(
 
 
 MEDIA_FIELDS = {
+    "link_title",
     "duration_sec",
     "width",
     "height",
@@ -119,3 +123,48 @@ def apply_media_info(db: Session, file_id: int, **values: Any) -> None:
 
 def queue_proxy(db: Session, file_id: int) -> None:
     jobs.enqueue(db, JobType.PROXY, {"file_id": file_id})
+
+
+def add_link(
+    db: Session,
+    actor: Actor,
+    *,
+    project_id: int,
+    url: str,
+    entity_type: str | None = None,
+    entity_id: int | None = None,
+    purpose: str = Purpose.REFERENCE.value,
+) -> tuple[models.File, bool]:
+    """Ссылка как файл (источник «ссылка»). Заголовок и картинку Open Graph подтянет фоновая задача.
+
+    Та же ссылка второй раз не создаёт дубль: берётся существующая запись и привязывается к
+    ещё одной карточке. Возвращает (файл, создан ли заново).
+    """
+    from app.services import links  # отложенный импорт: links сам использует этот модуль
+
+    permissions.require(permissions.can_upload(actor))
+    try:
+        normalized = linkpreview.parse_url(url).geturl()
+    except linkpreview.LinkError as exc:
+        raise core.ValidationError(str(exc)) from exc
+    file = db.scalar(
+        select(models.File).where(
+            models.File.project_id == project_id,
+            models.File.kind == FileKind.LINK.value,
+            models.File.url == normalized,
+            models.File.deleted_at.is_(None),
+        )
+    )
+    created = file is None
+    if file is None:
+        file = core.create(
+            db,
+            actor,
+            EntityType.FILE,
+            {"kind": FileKind.LINK.value, "source": FileSource.LINK.value, "url": normalized},
+            project_id=project_id,
+        )
+        jobs.enqueue(db, JobType.PREVIEW, {"file_id": file.id}, actor.id)
+    if entity_type is not None and entity_id is not None:
+        links.attach(db, actor, file.id, entity_type, entity_id, purpose)
+    return file, created

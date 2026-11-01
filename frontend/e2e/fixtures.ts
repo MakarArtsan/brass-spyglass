@@ -78,3 +78,32 @@ function hash(text: string): number {
   for (const ch of text) h = (h * 31 + ch.charCodeAt(0)) | 0
   return h
 }
+
+/** Загрузка файла прямо через API (как делает клиент: инициализация → куски → завершение). */
+export async function uploadViaApi(
+  page: Page,
+  filePath: string,
+  target?: { entityType: string; entityId: number; purpose?: string },
+): Promise<{ file: { id: number; original_name: string } }> {
+  const data = fs.readFileSync(filePath)
+  const init = await api<{ id: string }>(page, 'POST', '/uploads', { name: path.basename(filePath), size: data.length })
+  const sent = await page.context().request.patch(`${BASE_URL}/api/uploads/${init.id}`, {
+    data,
+    headers: { 'Upload-Offset': '0', 'Content-Type': 'application/octet-stream' },
+  })
+  if (!sent.ok()) throw new Error(`PATCH upload → ${sent.status()} ${await sent.text()}`)
+  return api(page, 'POST', `/uploads/${init.id}/complete`, target ? { entity_type: target.entityType, entity_id: target.entityId, purpose: target.purpose ?? 'reference' } : {})
+}
+
+/**
+ * Плитки дашборда под сгибом строятся при подходе к ним, а по Tab — сразу все (так ходит клавиатура).
+ * Tab повторяется, пока заглушек не останется: первое нажатие может прийти раньше, чем плитки
+ * успели навесить обработчик клавиши.
+ */
+export async function mountDashboardTiles(page: Page): Promise<void> {
+  await expect(page.getByText(/\d+:\d{2} из \d+:\d{2}/).first()).toBeVisible()
+  await expect(async () => {
+    await page.keyboard.press('Tab')
+    await expect(page.locator('section[aria-label]')).toHaveCount(0, { timeout: 700 })
+  }).toPass({ timeout: 10_000 })
+}

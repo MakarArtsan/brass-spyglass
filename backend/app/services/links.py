@@ -101,6 +101,25 @@ def _sync_takes(db: Session, entity_type: str, entity_id: int) -> None:
         shot.takes_count = count or 0
 
 
+# К чему можно привязать файл. Один набор и для обычной привязки, и для импорта из Telegram.
+ATTACH_TARGETS = frozenset(
+    {
+        EntityType.SCENE,
+        EntityType.SHOT,
+        EntityType.ASSET,
+        EntityType.ASSET_STATE,
+        EntityType.SETUP_PAYOFF,
+        EntityType.SOUND_CUE,
+        EntityType.TASK,
+    }
+)
+
+
+def require_attach_target(entity_type: str) -> None:
+    if entity_type not in ATTACH_TARGETS:
+        raise ValidationError(f"К «{entity_type}» файлы не привязываются")
+
+
 def attach(
     db: Session,
     actor: Actor,
@@ -114,16 +133,7 @@ def attach(
     permissions.require(permissions.can_upload(actor))
     if purpose not in {p.value for p in Purpose}:
         raise ValidationError(f"Неизвестное назначение: {purpose}")
-    if entity_type not in {
-        EntityType.SCENE,
-        EntityType.SHOT,
-        EntityType.ASSET,
-        EntityType.ASSET_STATE,
-        EntityType.SETUP_PAYOFF,
-        EntityType.SOUND_CUE,
-        EntityType.TASK,
-    }:
-        raise ValidationError(f"К «{entity_type}» файлы не привязываются")
+    require_attach_target(entity_type)
     file = core.get(db, EntityType.FILE, file_id)
     target = core.get(db, entity_type, entity_id)
 

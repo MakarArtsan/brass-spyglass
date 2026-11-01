@@ -27,12 +27,17 @@ import { useIsDesktop } from '@/hooks/useMediaQuery'
 import { usePanelParam } from '@/hooks/usePanelParam'
 import { usePerms } from '@/hooks/usePerms'
 import { num, timecode } from '@/lib/format'
+import { DashFilterBanner } from '@/components/DashFilterBanner'
+import { useDashFilter } from '@/hooks/useDashFilter'
 import { useBulkStatus, useCreate, useMeta, useReorder, useScenes, useShots, useUpdate } from '@/lib/queries'
 import type { Meta } from '@/lib/types'
 import { toast } from '@/lib/toast'
 import type { Scene, Shot, StatusKey } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { ru } from '@/ru'
+
+/** Лимит одного клипа Seedance; та же граница, что у тревоги «шоты длиннее 15 сек» на дашборде. */
+const LONG_SHOT_SEC = 15
 
 const opts = (values: string[] | undefined, labels: Record<string, string>) =>
   (values ?? []).map((v) => ({ value: v, label: labels[v] ?? v }))
@@ -237,25 +242,30 @@ export default function Shots() {
   const [adding, setAdding] = useState(false)
   const [filtersOpen, setFiltersOpen] = useState(false)
 
-  const filtersActive = query.trim() !== '' || statuses.length > 0 || sceneFilter !== 0
+  const dash = useDashFilter()
+  const filtersActive = query.trim() !== '' || statuses.length > 0 || sceneFilter !== 0 || dash.active
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   )
 
+  const { status: dashStatus, long: dashLong, tool: dashTool } = dash
   const groups = useMemo(() => {
     const q = query.trim().toLowerCase()
     const visible = (shots ?? []).filter(
       (s) =>
         (statuses.length === 0 || statuses.includes(s.status)) &&
+        (dashStatus === null || dashStatus.includes(s.status)) &&
+        (!dashLong || (s.status !== 'cut' && s.duration_sec > LONG_SHOT_SEC)) &&
+        (dashTool === null || s.tool === dashTool) &&
         (sceneFilter === 0 || s.scene_id === sceneFilter) &&
         (q === '' || s.code.includes(q) || (s.description ?? '').toLowerCase().includes(q)),
     )
     const byScene = new Map<number, Shot[]>()
     for (const s of visible) byScene.set(s.scene_id, [...(byScene.get(s.scene_id) ?? []), s])
     return (scenes ?? []).filter((sc) => byScene.has(sc.id)).map((sc) => ({ scene: sc, shots: byScene.get(sc.id)! }))
-  }, [shots, scenes, query, statuses, sceneFilter])
+  }, [shots, scenes, query, statuses, sceneFilter, dashStatus, dashLong, dashTool])
 
   const visibleIds = groups.flatMap((g) => g.shots.map((s) => s.id))
   const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id))
@@ -296,6 +306,7 @@ export default function Shots() {
           )
         }
       />
+      <DashFilterBanner filter={dash} />
       {adding && scenes && <NewShot scenes={scenes} onDone={() => setAdding(false)} />}
 
       <div className="mb-3 flex flex-wrap items-center gap-3">
