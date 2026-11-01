@@ -1,5 +1,6 @@
 import { FILM } from '@/brand'
 import { Countdown } from '@/components/Countdown'
+import { NotificationBell } from '@/components/NotificationBell'
 import { StraitMap } from '@/components/StraitMap'
 import { useIsDesktop } from '@/hooks/useMediaQuery'
 import type { Project } from '@/lib/api'
@@ -19,15 +20,18 @@ export function Header({ project }: { project?: Project }) {
             {project?.title ?? FILM.title}
           </p>
         </div>
-        {project && (
-          <Countdown
-            target={project.deadline_official}
-            label={ru.countdown.official}
-            parts={['d', 'h']}
-            small={!desktop}
-            className="shrink-0 items-end"
-          />
-        )}
+        <div className="flex shrink-0 items-center gap-3 lg:gap-5">
+          <NotificationBell />
+          {project && (
+            <Countdown
+              target={project.deadline_official}
+              label={ru.countdown.official}
+              parts={['d', 'h']}
+              small={!desktop}
+              className="shrink-0 items-end"
+            />
+          )}
+        </div>
       </div>
     </header>
   )
