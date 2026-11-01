@@ -1,5 +1,5 @@
 import * as Dropdown from '@radix-ui/react-dropdown-menu'
-import { AudioLines, FileText, Film, Image as ImageIcon, Link2, Loader2, MoreVertical, TriangleAlert } from 'lucide-react'
+import { AudioLines, FileText, Film, Flag, Image as ImageIcon, Link2, Loader2, MoreVertical, TriangleAlert } from 'lucide-react'
 import { Lens } from '@/components/Lens'
 import { displayName } from '@/lib/files'
 import { clock, formatDateTime } from '@/lib/format'
@@ -14,10 +14,15 @@ interface Props {
   onOpen: () => void
   onDetach?: () => void
   onDelete?: () => void
+  /** Открыть историю версий (для ссылок её нет). */
+  onVersions?: () => void
+  /** Это финальный файл карточки; onFinal переключает отметку. */
+  isFinal?: boolean
+  onFinal?: () => void
 }
 
 /** Превью файла в круглой рамке-окуляре: клик открывает просмотр, меню — действия. */
-export function FileTile({ item, onOpen, onDetach, onDelete }: Props) {
+export function FileTile({ item, onOpen, onDetach, onDelete, onVersions, isFinal, onFinal }: Props) {
   const { file } = item
   const Icon = icons[file.kind]
   const name = displayName(file)
@@ -43,16 +48,23 @@ export function FileTile({ item, onOpen, onDetach, onDelete }: Props) {
         {file.kind === 'video' && file.duration_sec != null && (
           <span className="mono absolute bottom-1.5 left-1/2 -translate-x-1/2 rounded bg-black/70 px-1 text-[10px]">{clock(file.duration_sec)}</span>
         )}
+        {isFinal && (
+          <span className="absolute left-0 top-0 inline-flex items-center gap-0.5 rounded-full bg-brass px-1.5 py-0.5 text-[10px] font-bold text-on-brass">
+            <Flag size={10} aria-hidden />
+            {ru.files.final}
+          </span>
+        )}
       </button>
       <div className="w-full text-center">
         <div className="truncate text-xs" title={name}>
+          {file.versions_count > 1 && <span className="mono mr-1 text-brass">{ru.files.versionBadge(file.version_no)}</span>}
           {name}
         </div>
         <div className={cn('truncate text-[10px] text-fog')} title={formatDateTime(file.uploaded_at)}>
           {file.uploaded_by?.name ?? ru.journal.system}
         </div>
       </div>
-      {(onDetach || onDelete) && (
+      {(onDetach || onDelete || onVersions || onFinal) && (
         <Dropdown.Root>
           <Dropdown.Trigger
             aria-label={`${ru.common.more}: ${name}`}
@@ -70,6 +82,17 @@ export function FileTile({ item, onOpen, onDetach, onDelete }: Props) {
                   {ru.files.download}
                 </a>
               </Dropdown.Item>
+              {onVersions && file.kind !== 'link' && (
+                <Dropdown.Item onSelect={onVersions} className="flex min-h-touch cursor-pointer items-center rounded-lg px-3 text-sm outline-none data-[highlighted]:bg-ink">
+                  {ru.files.versions}
+                  {file.versions_count > 1 ? ` (${file.versions_count})` : ''}
+                </Dropdown.Item>
+              )}
+              {onFinal && file.kind === 'video' && (
+                <Dropdown.Item onSelect={onFinal} className="flex min-h-touch cursor-pointer items-center rounded-lg px-3 text-sm outline-none data-[highlighted]:bg-ink">
+                  {isFinal ? ru.files.unsetFinal : ru.files.makeFinal}
+                </Dropdown.Item>
+              )}
               {onDetach && (
                 <Dropdown.Item onSelect={onDetach} className="flex min-h-touch cursor-pointer items-center rounded-lg px-3 text-sm outline-none data-[highlighted]:bg-ink">
                   {ru.files.detach}

@@ -4,6 +4,7 @@ import { FileTile } from '@/components/media/FileTile'
 import { dropZone, UploadButtons } from '@/components/Uploads'
 import { usePerms } from '@/hooks/usePerms'
 import { useEntityFiles, useFileMutations } from '@/lib/queries'
+import type { FileItem } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { ru } from '@/ru'
 
@@ -11,6 +12,7 @@ import { ru } from '@/ru'
 const TelegramWindow = lazy(() => import('@/components/telegram/TelegramWindow'))
 const LibraryPicker = lazy(() => import('@/components/media/LibraryPicker'))
 const LinkDialog = lazy(() => import('@/components/media/LinkDialog'))
+const VersionsDialog = lazy(() => import('@/components/media/VersionsDialog'))
 const MediaViewer = lazy(() => import('@/components/media/MediaViewer').then((m) => ({ default: m.MediaViewer })))
 
 interface Props {
@@ -22,14 +24,19 @@ interface Props {
   /** С каким назначением загружать сюда новые файлы. */
   uploadPurpose: string
   className?: string
+  /** id текущей версии финального файла карточки (у сцены и шота). */
+  finalId?: number | null
+  /** Выбрать файл финальным или снять выбор (null). Есть только у тех, кому можно править карточку. */
+  onSetFinal?: (fileId: number | null) => void
 }
 
 /** Файлы карточки одного назначения: плитки в рамке-линзе, загрузка кнопкой и перетаскиванием. */
-export function FilesSection({ title, entityType, entityId, purposes, uploadPurpose, className }: Props) {
+export function FilesSection({ title, entityType, entityId, purposes, uploadPurpose, className, finalId, onSetFinal }: Props) {
   const perms = usePerms()
   const { data } = useEntityFiles(entityType, entityId)
   const mutations = useFileMutations(entityType, entityId)
   const [open, setOpen] = useState<number | null>(null)
+  const [versionsOf, setVersionsOf] = useState<FileItem | null>(null)
   const [dialog, setDialog] = useState<'library' | 'link' | 'telegram' | null>(null)
   const items = (data ?? []).filter((a) => purposes.includes(a.purpose))
   // Ссылки открываются в новой вкладке, в окне просмотра листаются только файлы.
@@ -74,6 +81,9 @@ export function FilesSection({ title, entityType, entityId, purposes, uploadPurp
               key={a.attachment_id}
               item={a}
               onOpen={() => openItem(a)}
+              onVersions={() => setVersionsOf(a.file)}
+              isFinal={finalId != null && a.file.id === finalId}
+              onFinal={onSetFinal ? () => onSetFinal(finalId === a.file.id ? null : a.file.id) : undefined}
               onDetach={
                 perms.canUpload && (perms.meId === a.attached_by?.id || perms.role === 'owner' || perms.role === 'director')
                   ? () => mutations.detach.mutate(a.attachment_id)
@@ -91,6 +101,11 @@ export function FilesSection({ title, entityType, entityId, purposes, uploadPurp
       {open != null && (
         <Suspense fallback={null}>
           <MediaViewer files={viewable.map((a) => a.file)} index={open} onIndex={setOpen} onClose={() => setOpen(null)} />
+        </Suspense>
+      )}
+      {versionsOf && (
+        <Suspense fallback={null}>
+          <VersionsDialog file={versionsOf} onClose={() => setVersionsOf(null)} />
         </Suspense>
       )}
       {dialog === 'library' && (

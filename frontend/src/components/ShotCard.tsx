@@ -8,7 +8,7 @@ import { Field, Section } from '@/components/Section'
 import { StatusPill } from '@/components/StatusPill'
 import { usePerms } from '@/hooks/usePerms'
 import { toast } from '@/lib/toast'
-import { useAssets, useEntityFiles, useFileMutations, useMeta, useShot, useShotAsset, useUpdate } from '@/lib/queries'
+import { useAssets, useEntityFiles, useFileMutations, useMeta, useSetFinal, useShot, useShotAsset, useUpdate } from '@/lib/queries'
 import type { Shot, StatusKey } from '@/lib/types'
 import { ru } from '@/ru'
 
@@ -46,6 +46,7 @@ export function ShotCard({ shotId }: { shotId: number }) {
   const update = useUpdate<Shot>('shots')
   const link = useShotAsset(shotId)
   const fileMutations = useFileMutations('shot', shotId)
+  const setFinal = useSetFinal('shot', shotId)
 
   if (!shot) return <p className="p-4 text-sm text-fog">{ru.common.loading}</p>
   const editable = perms.canEdit(shot)
@@ -90,7 +91,15 @@ export function ShotCard({ shotId }: { shotId: number }) {
         </Field>
       </div>
 
-      <FilesSection title={ru.shots.takesTitle} entityType="shot" entityId={shot.id} purposes={['take', 'final']} uploadPurpose="take" />
+      <FilesSection
+        title={ru.shots.takesTitle}
+        entityType="shot"
+        entityId={shot.id}
+        purposes={['take', 'final']}
+        uploadPurpose="take"
+        finalId={shot.final?.id ?? null}
+        onSetFinal={editable ? (fileId) => setFinal.mutate(fileId, { onSuccess: () => toast(fileId == null ? ru.files.finalCleared : ru.files.finalSet) }) : undefined}
+      />
 
       {latest && (
         <Section

@@ -10,7 +10,8 @@ import { Field, Section } from '@/components/Section'
 import { StatusPill } from '@/components/StatusPill'
 import { usePerms } from '@/hooks/usePerms'
 import { num, timecode } from '@/lib/format'
-import { useScenes, useShots, useUpdate } from '@/lib/queries'
+import { useScenes, useSetFinal, useShots, useUpdate } from '@/lib/queries'
+import { toast } from '@/lib/toast'
 import type { Scene, Shot, StatusKey } from '@/lib/types'
 import { ru } from '@/ru'
 import NotFound from '@/pages/NotFound'
@@ -45,6 +46,7 @@ export default function SceneDetail() {
   const { data: shots } = useShots()
   const update = useUpdate<Scene>('scenes')
   const scene = scenes?.find((s) => String(s.id) === id)
+  const setFinal = useSetFinal('scene', scene?.id ?? 0)
 
   if (!scenes) return <p className="text-fog">{ru.common.loading}</p>
   if (!scene) return <NotFound />
@@ -121,7 +123,16 @@ export default function SceneDetail() {
         </Field>
       </div>
 
-      <p className="rounded-xl border border-dashed border-line p-3 text-sm text-fog">{ru.scenes.finalFile}</p>
+      <FilesSection
+        title={ru.scenes.finalFile}
+        entityType="scene"
+        entityId={scene.id}
+        purposes={['final']}
+        uploadPurpose="final"
+        finalId={scene.final?.id ?? null}
+        onSetFinal={editable ? (fileId) => setFinal.mutate(fileId, { onSuccess: () => toast(fileId == null ? ru.files.finalCleared : ru.files.finalSet) }) : undefined}
+      />
+      <p className="-mt-3 text-xs text-fog">{scene.final ? `${scene.final.original_name ?? ''} · v${scene.final.version_no}` : `${ru.scenes.finalNone}. ${ru.scenes.finalFileHint}`}</p>
 
       <Section title={ru.scenes.ribbon}>
         {own.length === 0 ? (
@@ -158,7 +169,7 @@ export default function SceneDetail() {
         )}
       </Section>
 
-      <FilesSection title={ru.shots.referencesTitle} entityType="scene" entityId={scene.id} purposes={['reference', 'blockout', 'other']} uploadPurpose="reference" />
+      <FilesSection title={ru.shots.referencesTitle} entityType="scene" entityId={scene.id} purposes={['reference', 'blockout', 'other', 'take']} uploadPurpose="reference" />
       <Comments entityType="scene" entityId={scene.id} />
       <History entityType="scene" entityId={scene.id} />
     </article>

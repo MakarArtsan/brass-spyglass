@@ -73,6 +73,14 @@ export function uniqueImage(tag: string): string {
   return file
 }
 
+/** Уникальное короткое видео (своя частота тона → своя контрольная сумма): для версий файла. */
+export function uniqueVideo(tag: string): string {
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'bs-e2e-')), `${tag}.mp4`)
+  const freq = 200 + (Math.abs(hash(tag)) % 600)
+  execFileSync('ffmpeg', ['-y', '-v', 'error', '-f', 'lavfi', '-i', `testsrc2=size=320x180:rate=24:duration=1`, '-f', 'lavfi', '-i', `sine=frequency=${freq}:duration=1`, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', file])
+  return file
+}
+
 function hash(text: string): number {
   let h = 0
   for (const ch of text) h = (h * 31 + ch.charCodeAt(0)) | 0
