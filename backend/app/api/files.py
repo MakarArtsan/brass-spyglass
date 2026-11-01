@@ -25,7 +25,7 @@ from app.auth import session
 from app.config import get_settings
 from app.constants import EntityType, FileKind, FileSource, Purpose
 from app.db import ci_contains
-from app.services import core, files, links, projects
+from app.services import core, files, finals, links, projects, versions
 
 router = APIRouter(dependencies=[Depends(session.same_origin)])
 
@@ -132,6 +132,7 @@ class UploadComplete(BaseModel):
     entity_id: int | None = None
     purpose: Literal[tuple(p.value for p in Purpose)] = Purpose.REFERENCE.value  # type: ignore[valid-type]
     force: bool = False  # добавить, даже если такой файл уже есть
+    version_of: int | None = None  # загрузить как новую версию этого файла
 
 
 def _sha256(path: Path) -> str:
@@ -183,12 +184,33 @@ def complete_upload(
         )
     if (body.entity_type is None) != (body.entity_id is None):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Нужны и тип, и id карточки")
+    if body.version_of is not None and body.entity_type is not None:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "Новая версия занимает место прежней: карточка не указывается",
+        )
     if body.entity_type is not None:
         core.get(db, body.entity_type, body.entity_id)  # type: ignore[arg-type]  # цель должна существовать
 
     part = uploads.part_path(settings, upload_id)
     digest = _sha256(part)
     project_id = _project_id(db)
+    if body.version_of is not None:
+        version = versions.new_version(
+            db,
+            actor,
+            base_file_id=body.version_of,
+            project_id=project_id,
+            tmp_path=part,
+            original_name=meta["name"],
+            mime=meta.get("mime") or mimetypes.guess_type(meta["name"])[0],
+            size_bytes=meta["size"],
+            sha256=digest,
+            files_dir=settings.files_dir,
+        )
+        uploads.discard(settings, upload_id)
+        request.app.state.jobs.wake()
+        return {"file": serialize.files_out(db, [version])[0], "attachment_id": None}
     duplicates = files.find_duplicates(db, digest, project_id)
     if duplicates and not body.force:
         return JSONResponse(
@@ -275,7 +297,9 @@ def library(
     limit: Annotated[int, Query(ge=1, le=200)] = 60,
 ) -> dict[str, Any]:
     """Медиатека: все файлы проекта, новые сверху. Фильтры по типу, источнику, автору, дате."""
-    stmt = select(models.File).where(models.File.deleted_at.is_(None))
+    stmt = select(models.File).where(
+        models.File.deleted_at.is_(None), models.File.is_current.is_(True)
+    )
     if kind is not None:
         stmt = stmt.where(models.File.kind == kind.value)
     if source is not None:
@@ -348,6 +372,7 @@ def list_entity_files(
                 models.Attachment.entity_type == entity_type,
                 models.Attachment.entity_id == entity_id,
                 models.File.deleted_at.is_(None),
+                models.File.is_current.is_(True),
             )
             .order_by(models.Attachment.id)
         )
@@ -364,6 +389,39 @@ def list_entity_files(
         }
         for (a, _), item in zip(rows, shown, strict=True)
     ]
+
+
+@router.get("/files/{file_id}/versions")
+def file_versions(file_id: int, db: DbDep, _: UserDep) -> list[dict[str, Any]]:
+    """Все версии файла, новые сверху: у каждой автор и дата."""
+    file = core.get(db, EntityType.FILE, file_id)
+    group = [v for v in versions.members(db, file) if v.deleted_at is None]  # type: ignore[arg-type]
+    return serialize.files_out(db, list(reversed(group)))
+
+
+@router.post("/files/{file_id}/rollback")
+def rollback_file(file_id: int, db: DbDep, actor: ActorDep) -> dict[str, Any]:
+    """Откат одной кнопкой: выбранная версия становится текущей, запись — в журнал."""
+    return serialize.files_out(db, [versions.rollback(db, actor, file_id)])[0]
+
+
+class FinalBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    file_id: int | None = None  # None — снять выбор
+
+
+@router.put("/scenes/{scene_id}/final")
+def set_scene_final(scene_id: int, body: FinalBody, db: DbDep, actor: ActorDep) -> dict[str, Any]:
+    finals.set_final(db, actor, EntityType.SCENE, scene_id, body.file_id)
+    scene = core.get(db, EntityType.SCENE, scene_id)
+    return {"final": serialize.final_info(finals.resolve(db, [scene]).get(scene_id))}  # type: ignore[list-item]
+
+
+@router.put("/shots/{shot_id}/final")
+def set_shot_final(shot_id: int, body: FinalBody, db: DbDep, actor: ActorDep) -> dict[str, Any]:
+    finals.set_final(db, actor, EntityType.SHOT, shot_id, body.file_id)
+    shot = core.get(db, EntityType.SHOT, shot_id)
+    return {"final": serialize.final_info(finals.resolve(db, [shot]).get(shot_id))}  # type: ignore[list-item]
 
 
 @router.get("/files/{file_id}")
@@ -473,6 +531,7 @@ def zip_entity_files(entity_type: str, entity_id: int, db: DbDep, _: UserDep) ->
                 models.Attachment.entity_type == entity_type,
                 models.Attachment.entity_id == entity_id,
                 models.File.deleted_at.is_(None),
+                models.File.is_current.is_(True),
             )
             .order_by(models.Attachment.id)
         ).scalars()

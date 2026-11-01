@@ -90,6 +90,10 @@ export function UploadProvider({ children }: { children: ReactNode }) {
       if (target.entityType && target.entityId != null) {
         qc.invalidateQueries({ queryKey: keys.files(target.entityType, target.entityId) })
       }
+      if (target.versionOf != null) {
+        // новая версия меняет все карточки, где лежит файл, и историю версий
+        for (const k of ['files', 'library', 'file-versions']) qc.invalidateQueries({ queryKey: [k] })
+      }
       for (const k of ['shots', 'assets', 'scenes', 'shot', 'asset', 'activity']) qc.invalidateQueries({ queryKey: [k] })
     },
     [qc],

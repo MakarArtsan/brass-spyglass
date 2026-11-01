@@ -4,9 +4,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app import models, permissions
-from app.constants import EntityType, Purpose
+from app.constants import EntityType, NotificationKind, Purpose
 from app.permissions import Actor
-from app.services import core
+from app.services import core, notifications
 from app.services.core import ConflictError, NotFoundError, ValidationError, log_activity
 
 
@@ -81,7 +81,7 @@ def remove_shot_asset(db: Session, actor: Actor, shot_id: int, asset_id: int) ->
 # --- вложения ----------------------------------------------------------------------------------
 
 
-def _sync_takes(db: Session, entity_type: str, entity_id: int) -> None:
+def sync_takes(db: Session, entity_type: str, entity_id: int) -> None:
     """`shot.takes_count` — число дублей-вложений; поддерживается при привязке и снятии."""
     if entity_type != EntityType.SHOT:
         return
@@ -94,6 +94,7 @@ def _sync_takes(db: Session, entity_type: str, entity_id: int) -> None:
             models.Attachment.entity_id == entity_id,
             models.Attachment.purpose == Purpose.TAKE,
             models.File.deleted_at.is_(None),
+            models.File.is_current.is_(True),
         )
     )
     shot = db.get(models.Shot, entity_id)
@@ -157,7 +158,7 @@ def attach(
     )
     db.add(row)
     db.flush()
-    _sync_takes(db, entity_type, entity_id)
+    sync_takes(db, entity_type, entity_id)
     log_activity(
         db,
         actor.id,
@@ -166,6 +167,14 @@ def attach(
         entity_id,
         {"file_id": file_id, "file": file.original_name, "purpose": purpose},  # type: ignore[attr-defined]
         getattr(target, "project_id", None) or file.project_id,  # type: ignore[attr-defined]
+    )
+    notifications.notify(
+        db,
+        actor.id,
+        NotificationKind.FILE,
+        entity_type,
+        entity_id,
+        file.original_name or file.url,  # type: ignore[attr-defined]
     )
     return row
 
@@ -180,7 +189,7 @@ def detach(db: Session, actor: Actor, attachment_id: int) -> None:
     file = db.get(models.File, file_id)
     db.delete(row)
     db.flush()
-    _sync_takes(db, entity_type, entity_id)
+    sync_takes(db, entity_type, entity_id)
     log_activity(
         db,
         actor.id,

@@ -15,6 +15,7 @@ import type {
   Attached,
   CommentItem,
   FileItem,
+  FinalFile,
   LibraryPage,
   Meta,
   Scene,
@@ -290,6 +291,41 @@ export function useCommentMutations(type: string, id: number) {
       onSuccess: refresh,
     }),
   }
+}
+
+export function useFileVersions(fileId: number | null) {
+  return useQuery({
+    queryKey: ['file-versions', fileId] as const,
+    queryFn: () => api<FileItem[]>(`/files/${fileId}/versions`),
+    enabled: fileId != null,
+  })
+}
+
+/** Откат: выбранная версия становится текущей на всех карточках, где лежит файл. */
+export function useRollback() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (fileId: number) => api<FileItem>(`/files/${fileId}/rollback`, { method: 'POST' }),
+    onSuccess: () => {
+      for (const k of ['file-versions', 'files', 'library', 'shots', 'scenes', 'shot', 'activity']) {
+        qc.invalidateQueries({ queryKey: [k] })
+      }
+    },
+  })
+}
+
+/** Финальный файл сцены или шота (null — снять выбор). */
+export function useSetFinal(type: 'scene' | 'shot', id: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (fileId: number | null) =>
+      api<{ final: FinalFile | null }>(`/${type}s/${id}/final`, { method: 'PUT', body: JSON.stringify({ file_id: fileId }) }),
+    onSuccess: () => {
+      for (const k of [type === 'scene' ? 'scenes' : 'shots', 'shot', 'activity', 'dashboard', 'animatic']) {
+        qc.invalidateQueries({ queryKey: [k] })
+      }
+    },
+  })
 }
 
 export function useFileMutations(type: string, id: number) {

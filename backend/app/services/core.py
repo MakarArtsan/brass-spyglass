@@ -13,7 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import models, permissions
-from app.constants import EntityType
+from app.constants import EntityType, NotificationKind
 from app.db import utcnow
 from app.events import queue_event
 from app.permissions import Actor, PermissionDenied
@@ -89,7 +89,6 @@ ENTITIES: dict[str, EntitySpec] = {
             "key_assets",
             "lines_en",
             "side",
-            "final_file_id",
         },
     ),
     EntityType.SHOT: EntitySpec(
@@ -108,7 +107,6 @@ ENTITIES: dict[str, EntitySpec] = {
             "stage",
             "takes_count",
             "side",
-            "final_file_id",
         },
     ),
     EntityType.ASSET: EntitySpec(
@@ -305,6 +303,17 @@ def create(
         {k: _jsonable(v) for k, v in data.items()},
         project_id,
     )
+    if entity_type == EntityType.COMMENT:
+        from app.services import notifications  # отложенно: сервис уведомлений знает только модели
+
+        notifications.notify(
+            db,
+            actor.id,
+            NotificationKind.COMMENT,
+            obj.entity_type,  # type: ignore[attr-defined]
+            obj.entity_id,  # type: ignore[attr-defined]
+            obj.body,  # type: ignore[attr-defined]
+        )
     return obj
 
 

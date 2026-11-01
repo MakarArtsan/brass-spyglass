@@ -28,7 +28,7 @@ export const test = base.extend<{ asRole: (role: Role) => Promise<void> }>({
 export { expect }
 
 /** JSON-запрос к API от имени уже вошедшего в этом контексте пользователя. */
-export async function api<T = unknown>(page: Page, method: 'GET' | 'POST' | 'PATCH' | 'DELETE', url: string, data?: unknown): Promise<T> {
+export async function api<T = unknown>(page: Page, method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', url: string, data?: unknown): Promise<T> {
   const res = await page.context().request.fetch(`${BASE_URL}/api${url}`, { method, data })
   if (!res.ok()) throw new Error(`${method} ${url} → ${res.status()} ${await res.text()}`)
   return (res.status() === 204 ? null : await res.json()) as T
@@ -70,6 +70,14 @@ export function sampleMedia(): Record<string, string> {
 export function uniqueImage(tag: string): string {
   const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'bs-e2e-')), `${tag}.png`)
   execFileSync('ffmpeg', ['-y', '-v', 'error', '-f', 'lavfi', '-i', `color=c=0x${(Math.abs(hash(tag)) % 0xffffff).toString(16).padStart(6, '0')}:size=320x180`, '-frames:v', '1', file])
+  return file
+}
+
+/** Уникальное короткое видео (своя частота тона → своя контрольная сумма): для версий файла. */
+export function uniqueVideo(tag: string): string {
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'bs-e2e-')), `${tag}.mp4`)
+  const freq = 200 + (Math.abs(hash(tag)) % 600)
+  execFileSync('ffmpeg', ['-y', '-v', 'error', '-f', 'lavfi', '-i', `testsrc2=size=320x180:rate=24:duration=1`, '-f', 'lavfi', '-i', `sine=frequency=${freq}:duration=1`, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', file])
   return file
 }
 

@@ -35,6 +35,7 @@ from app.constants import (
     FileSource,
     JobStatus,
     JobType,
+    NotificationKind,
     Priority,
     Purpose,
     Role,
@@ -472,6 +473,31 @@ class Job(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     started_at: Mapped[datetime | None] = mapped_column(UTCDateTime, default=None)
     finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime, default=None)
+
+
+class Notification(Base):
+    """Уведомление на сайте: кто-то оставил комментарий или добавил файл на карточку.
+
+    Одному получателю — одна строка; подряд идущие события одного автора на одной карточке
+    склеиваются (`count`), чтобы 20 загруженных файлов не давали 20 уведомлений.
+    """
+
+    __tablename__ = "notification"
+    __table_args__ = (
+        CheckConstraint(check_in("kind", NotificationKind), name="kind"),
+        Index("ix_notification_user", "user_id", "read_at", "id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"))  # кому
+    actor_id: Mapped[int | None] = mapped_column(ForeignKey("user.id"), default=None)  # кто
+    kind: Mapped[str] = mapped_column(String(16))
+    entity_type: Mapped[str] = mapped_column(String(16))  # карточка, куда ведёт клик
+    entity_id: Mapped[int] = mapped_column(Integer)
+    count: Mapped[int] = mapped_column(Integer, default=1)
+    snippet: Mapped[str | None] = mapped_column(String(300), default=None)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    read_at: Mapped[datetime | None] = mapped_column(UTCDateTime, default=None)
 
 
 class ExportJob(Base):

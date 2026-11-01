@@ -10,6 +10,7 @@ import io
 import logging
 import re
 from datetime import timedelta
+from pathlib import Path
 
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
@@ -147,6 +148,14 @@ class TelegramService:
                     await event.respond(MSG_OK.format(name=result.name))
                 else:
                     await event.respond(MSG_EXPIRED)
+
+    async def send_to_owner(self, path: Path, caption: str) -> None:
+        """Бот присылает файл владельцу (копия базы). Нужно, чтобы владелец когда-то нажал Start."""
+        if self.bot is None or self.settings.owner_tg_id is None:
+            raise RuntimeError("бот или OWNER_TG_ID не настроены")
+        await self.bot.send_file(  # type: ignore[misc]
+            self.settings.owner_tg_id, str(path), caption=caption, force_document=True
+        )
 
     # --- ежедневная проверка членства ------------------------------------------------------
 

@@ -77,12 +77,15 @@ class Batch {
       void qc.invalidateQueries({ queryKey: ['library'] })
       void qc.invalidateQueries({ queryKey: ['tg'] })
     }
+    if (dirty.has('notify')) void qc.invalidateQueries({ queryKey: ['notifications'] })
+    if (dirty.has('export')) void qc.invalidateQueries({ queryKey: ['exports'] })
     if (dirty.has('comment')) void qc.invalidateQueries({ queryKey: ['comments'] })
     if (dirty.has('tg')) void qc.invalidateQueries({ queryKey: ['tg'] })
     if (dirty.has('project')) void qc.invalidateQueries({ queryKey: ['project'] })
     if (dirty.has('user')) void qc.invalidateQueries({ queryKey: ['users'] })
     // Почти всё, что происходит в проекте, видно на дашборде и в ленте.
     void qc.invalidateQueries({ queryKey: ['dashboard'] })
+    void qc.invalidateQueries({ queryKey: ['animatic'] })
     void qc.invalidateQueries({ queryKey: ['activity'] })
   }
 
@@ -120,11 +123,16 @@ export function useLiveUpdates(enabled: boolean): void {
           return
         }
         if (event.type === 'resync') invalidateEverything(qc)
-        else if (event.type === 'activity') batch.add(event.entity_type)
+        else if (event.type === 'activity') {
+          batch.add(event.entity_type)
+          // комментарий, файл на карточке и новая версия — это то, о чём уведомляют
+          if (event.entity_type === 'comment' || event.action === 'attach' || event.action === 'version') batch.add('notify')
+        }
         else if (event.type === 'tg') batch.add('tg')
         else if (event.type === 'job') {
           jobListeners.forEach((listener) => listener(event))
           if (event.job_type === 'tg_import') batch.add('tg')
+          if (event.job_type === 'export') batch.add('export')
           if (event.status === 'done' || event.status === 'failed') batch.add('files')
         }
       }

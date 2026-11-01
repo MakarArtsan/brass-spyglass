@@ -132,6 +132,101 @@ def project_scene_stats(db: Session, project_id: int) -> dict[int, SceneStat]:
     return scene_stats(load_scene_inputs(db, project_id), load_shot_inputs(db, project_id))
 
 
+# --- таймлайн фильма: раскладка шотов и звука (аниматик, экспорт) ---------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class ShotLay:
+    id: int
+    scene_id: int
+    order: int
+    duration_sec: float
+    status: str
+
+
+@dataclass(frozen=True, slots=True)
+class ShotSpan:
+    shot_id: int
+    scene_id: int
+    start_sec: float
+    end_sec: float
+
+
+@dataclass(frozen=True, slots=True)
+class SceneSpan:
+    scene_id: int
+    start_sec: float
+    end_sec: float
+    shots: tuple[ShotSpan, ...]
+
+
+def film_layout(scenes: Sequence[SceneIn], shots: Sequence[ShotLay]) -> list[SceneSpan]:
+    """Шоты встык в порядке трекера: сцены по `order`, шоты внутри сцены по `order`.
+
+    Ширина шота — его длительность; у сцены без живых шотов — её плановая длительность.
+    Вырезанные сцены и шоты на таймлайне времени не занимают. Номер сцены на порядок не влияет.
+    """
+    by_scene: dict[int, list[ShotLay]] = defaultdict(list)
+    for shot in shots:
+        if shot.status != CUT:
+            by_scene[shot.scene_id].append(shot)
+    out: list[SceneSpan] = []
+    cursor = 0.0
+    for scene in sorted(scenes, key=lambda s: (s.order, s.id)):
+        if scene.status == CUT:
+            continue
+        start = cursor
+        spans: list[ShotSpan] = []
+        for shot in sorted(by_scene[scene.id], key=lambda s: (s.order, s.id)):
+            spans.append(ShotSpan(shot.id, scene.id, cursor, cursor + shot.duration_sec))
+            cursor += shot.duration_sec
+        if not spans:
+            cursor += scene.planned_sec
+        out.append(SceneSpan(scene.id, start, cursor, tuple(spans)))
+    return out
+
+
+DEFAULT_CUE_SEC = 2.0
+# Дорожки звука на таймлайне (ТЗ: A1 — реплики, A2 — SFX, A3 — музыка). Тишина дорожки не занимает.
+SOUND_LANES: dict[str, int | None] = {
+    "dialogue": 1,
+    "sfx": 2,
+    "ambience": 2,
+    "music": 3,
+    "silence": None,
+}
+
+
+@dataclass(frozen=True, slots=True)
+class CueIn:
+    id: int
+    scene_id: int | None
+    shot_id: int | None
+    offset_sec: float
+    duration_sec: float | None  # длительность звукового файла, если он есть
+
+
+def cue_span(cue: CueIn, layout: Sequence[SceneSpan]) -> tuple[float, float] | None:
+    """Где реплика или звук стоят на таймлайне: от начала шота (или сцены, или фильма) плюс сдвиг.
+    None — если сцена или шот вырезаны и их на таймлайне нет."""
+    anchor = 0.0
+    if cue.shot_id is not None or cue.scene_id is not None:
+        found: float | None = None
+        for scene in layout:
+            for shot in scene.shots:
+                if shot.shot_id == cue.shot_id:
+                    found = shot.start_sec
+            if found is None and scene.scene_id == cue.scene_id:
+                found = scene.start_sec
+            if found is not None:
+                break
+        if found is None:
+            return None
+        anchor = found
+    start = anchor + max(0.0, cue.offset_sec)
+    return start, start + (cue.duration_sec or DEFAULT_CUE_SEC)
+
+
 def assets_without_shots(db: Session, project_id: int) -> list[models.Asset]:
     used = (
         select(models.ShotAsset.asset_id)
@@ -635,7 +730,11 @@ def _scene_rows(db: Session, project_id: int) -> list[models.Scene]:
 def _media_summary(db: Session, project_id: int) -> dict[str, Any]:
     rows = db.execute(
         select(models.File.kind, models.File.source, func.count())
-        .where(models.File.project_id == project_id, models.File.deleted_at.is_(None))
+        .where(
+            models.File.project_id == project_id,
+            models.File.deleted_at.is_(None),
+            models.File.is_current.is_(True),
+        )
         .group_by(models.File.kind, models.File.source)
     )
     by_kind = {kind.value: 0 for kind in FileKind}

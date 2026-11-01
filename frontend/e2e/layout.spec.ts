@@ -43,10 +43,10 @@ test.describe('раскладки', () => {
   test('разделы следующих этапов — заглушки с номером этапа', async ({ page, isMobile }) => {
     test.skip(!!isMobile, 'на телефоне проверено через «Ещё»')
     await page.goto('/')
-    await page.getByRole('link', { name: 'Аниматик' }).click()
-    await expect(page).toHaveURL(/\/animatic$/)
-    await expect(page.getByRole('heading', { name: 'Аниматик' })).toBeVisible()
-    await expect(page.getByText('Раздел появится на этапе 3')).toBeVisible()
+    await page.getByRole('link', { name: 'Корзина' }).click()
+    await expect(page).toHaveURL(/\/trash$/)
+    await expect(page.getByRole('heading', { name: 'Корзина' })).toBeVisible()
+    await expect(page.getByText('Раздел появится на этапе 4')).toBeVisible()
   })
 
   test('неизвестный адрес — страница 404 с возвратом на дашборд', async ({ page }) => {

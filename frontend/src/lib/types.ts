@@ -35,6 +35,7 @@ export interface Scene extends Work {
   lines_en: string | null
   side: 'north' | 'south' | null
   final_file_id: number | null
+  final: FinalFile | null
   start_sec: number | null
   end_sec: number | null
   shots_count: number
@@ -71,6 +72,7 @@ export interface Shot extends Work {
   takes_count: number
   side: 'north' | 'south' | null
   final_file_id: number | null
+  final: FinalFile | null
   assets: ShotAssetRef[]
   files_count: number
   preview: Preview | null
@@ -164,8 +166,23 @@ export interface Person {
   has_avatar: boolean
 }
 
+/** Финальный файл сцены или шота: его текущая версия, с готовыми ссылками для плеера. */
+export interface FinalFile {
+  id: number
+  original_name: string | null
+  version_no: number
+  duration_sec: number | null
+  kind: FileItem['kind']
+  urls: Partial<Record<'original' | 'thumb' | 'poster' | 'play', string>>
+}
+
 export interface FileItem {
   id: number
+  /** Версии одного файла: v1, v2…; на карточке показывается текущая. */
+  version_group_id: number | null
+  version_no: number
+  is_current: boolean
+  versions_count: number
   kind: 'video' | 'image' | 'audio' | 'document' | 'link'
   source: 'upload' | 'telegram' | 'link'
   original_name: string | null

@@ -22,7 +22,7 @@ ENV PYTHONUNBUFFERED=1 \
     FRONTEND_DIR=/app/static
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg \
+    && apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

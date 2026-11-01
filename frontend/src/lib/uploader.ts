@@ -4,6 +4,8 @@ export interface UploadTarget {
   entityType?: string
   entityId?: number
   purpose?: string
+  /** Загрузить как новую версию этого файла: карточка не указывается, привязки переходят сами. */
+  versionOf?: number
 }
 
 export interface UploadHooks {
@@ -180,10 +182,11 @@ export async function uploadFile(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          entity_type: target.entityType ?? null,
-          entity_id: target.entityId ?? null,
+          entity_type: target.versionOf != null ? null : (target.entityType ?? null),
+          entity_id: target.versionOf != null ? null : (target.entityId ?? null),
           purpose: target.purpose ?? 'reference',
           force: resume?.force ?? false,
+          ...(target.versionOf != null ? { version_of: target.versionOf } : {}),
         }),
         signal: hooks.signal,
       })

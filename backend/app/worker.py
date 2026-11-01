@@ -131,7 +131,24 @@ def _tg_import(db: Session, job: models.Job, settings: Settings) -> None:
         importer.run_import(job_id, created_by, payload, settings)
 
 
+def _export(db: Session, job: models.Job, settings: Settings) -> None:
+    from app.services import exports
+
+    export_id, job_id = int(job.payload["export_id"]), job.id
+    db.rollback()  # сборка пакета долгая: транзакцию не держим
+    exports.run(export_id, job_id, settings)
+
+
+def _backup(db: Session, job: models.Job, settings: Settings) -> None:
+    from app import backup
+
+    db.rollback()
+    backup.run(settings)
+
+
 HANDLERS: dict[str, Callable[[Session, models.Job, Settings], None]] = {
+    JobType.BACKUP.value: _backup,
+    JobType.EXPORT.value: _export,
     JobType.TG_IMPORT.value: _tg_import,
     JobType.PREVIEW.value: _preview,
     JobType.WAVEFORM.value: _waveform,

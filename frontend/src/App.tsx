@@ -12,8 +12,10 @@ import Placeholder from '@/pages/Placeholder'
 import Dashboard from '@/pages/Dashboard'
 
 // Страницы грузятся по требованию: на дашборде и экране входа не нужны dnd-kit, wavesurfer и т. д.
+const Animatic = lazy(() => import('@/pages/Animatic'))
 const Assets = lazy(() => import('@/pages/Assets'))
 const Brand = lazy(() => import('@/pages/Brand'))
+const Export = lazy(() => import('@/pages/Export'))
 const Journal = lazy(() => import('@/pages/Journal'))
 const Media = lazy(() => import('@/pages/Media'))
 const SceneDetail = lazy(() => import('@/pages/SceneDetail'))
@@ -29,6 +31,8 @@ const IMPLEMENTED: Record<string, JSX.Element> = {
   '/': <Dashboard />,
   '/scenes': <Scenes />,
   '/shots': <Shots />,
+  '/animatic': <Animatic />,
+  '/export': <Export />,
   '/media': <Media />,
   '/telegram': <Telegram />,
   '/assets': <Assets />,

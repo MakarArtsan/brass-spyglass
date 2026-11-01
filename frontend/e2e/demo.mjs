@@ -27,7 +27,7 @@ async function call(cookie, method, url, body, extra = {}) {
   return res.status === 204 ? null : res.json().catch(() => null)
 }
 
-async function upload(cookie, file, target) {
+export async function upload(cookie, file, target) {
   const data = new Uint8Array(fs.readFileSync(file))
   const init = await call(cookie, 'POST', '/api/uploads', { name: path.basename(file), size: data.length })
   await call(cookie, 'PATCH', `/api/uploads/${init.id}`, data, { 'Upload-Offset': '0', 'Content-Type': 'application/octet-stream' })
