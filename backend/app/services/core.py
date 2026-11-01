@@ -89,7 +89,6 @@ ENTITIES: dict[str, EntitySpec] = {
             "key_assets",
             "lines_en",
             "side",
-            "final_file_id",
         },
     ),
     EntityType.SHOT: EntitySpec(
@@ -108,7 +107,6 @@ ENTITIES: dict[str, EntitySpec] = {
             "stage",
             "takes_count",
             "side",
-            "final_file_id",
         },
     ),
     EntityType.ASSET: EntitySpec(

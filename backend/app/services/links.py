@@ -81,7 +81,7 @@ def remove_shot_asset(db: Session, actor: Actor, shot_id: int, asset_id: int) ->
 # --- вложения ----------------------------------------------------------------------------------
 
 
-def _sync_takes(db: Session, entity_type: str, entity_id: int) -> None:
+def sync_takes(db: Session, entity_type: str, entity_id: int) -> None:
     """`shot.takes_count` — число дублей-вложений; поддерживается при привязке и снятии."""
     if entity_type != EntityType.SHOT:
         return
@@ -94,6 +94,7 @@ def _sync_takes(db: Session, entity_type: str, entity_id: int) -> None:
             models.Attachment.entity_id == entity_id,
             models.Attachment.purpose == Purpose.TAKE,
             models.File.deleted_at.is_(None),
+            models.File.is_current.is_(True),
         )
     )
     shot = db.get(models.Shot, entity_id)
@@ -157,7 +158,7 @@ def attach(
     )
     db.add(row)
     db.flush()
-    _sync_takes(db, entity_type, entity_id)
+    sync_takes(db, entity_type, entity_id)
     log_activity(
         db,
         actor.id,
@@ -180,7 +181,7 @@ def detach(db: Session, actor: Actor, attachment_id: int) -> None:
     file = db.get(models.File, file_id)
     db.delete(row)
     db.flush()
-    _sync_takes(db, entity_type, entity_id)
+    sync_takes(db, entity_type, entity_id)
     log_activity(
         db,
         actor.id,

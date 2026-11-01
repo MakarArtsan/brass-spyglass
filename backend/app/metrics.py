@@ -635,7 +635,11 @@ def _scene_rows(db: Session, project_id: int) -> list[models.Scene]:
 def _media_summary(db: Session, project_id: int) -> dict[str, Any]:
     rows = db.execute(
         select(models.File.kind, models.File.source, func.count())
-        .where(models.File.project_id == project_id, models.File.deleted_at.is_(None))
+        .where(
+            models.File.project_id == project_id,
+            models.File.deleted_at.is_(None),
+            models.File.is_current.is_(True),
+        )
         .group_by(models.File.kind, models.File.source)
     )
     by_kind = {kind.value: 0 for kind in FileKind}

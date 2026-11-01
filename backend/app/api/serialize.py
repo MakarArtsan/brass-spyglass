@@ -34,6 +34,7 @@ def previews(db: Session, entity_type: str, ids: list[int]) -> dict[int, dict[st
             models.Attachment.entity_type == entity_type,
             models.Attachment.entity_id.in_(ids),
             models.File.deleted_at.is_(None),
+            models.File.is_current.is_(True),
             models.File.thumb_path.is_not(None),
         )
         .order_by(models.Attachment.id)
@@ -61,19 +62,40 @@ def file_counts(db: Session, entity_type: str, ids: list[int]) -> dict[int, int]
             models.Attachment.entity_type == entity_type,
             models.Attachment.entity_id.in_(ids),
             models.File.deleted_at.is_(None),
+            models.File.is_current.is_(True),
         )
         .group_by(models.Attachment.entity_id)
     )
     return dict(rows.all())
 
 
+def final_info(file: models.File | None) -> dict[str, Any] | None:
+    """Финальный файл карточки: текущая версия, ссылки для плеера и размеры для аниматика."""
+    if file is None:
+        return None
+    urls = file_urls(file)
+    return {
+        "id": file.id,
+        "original_name": file.original_name,
+        "version_no": file.version_no,
+        "duration_sec": file.duration_sec,
+        "kind": file.kind,
+        "processing": False,
+        "urls": {k: v for k, v in urls.items() if k in ("original", "play", "poster", "thumb")},
+    }
+
+
 def scenes_out(db: Session, project_id: int, scenes: list[models.Scene]) -> list[dict[str, Any]]:
+    from app.services import finals
+
     stats = metrics.project_scene_stats(db, project_id)
     shown = previews(db, EntityType.SCENE, [s.id for s in scenes])
+    final_files = finals.resolve(db, scenes)
     out = []
     for scene in scenes:
         stat = stats.get(scene.id)
         item = column_dict(scene)
+        item["final"] = final_info(final_files.get(scene.id))
         if stat:
             item.update(
                 start_sec=stat.start_sec,
@@ -126,11 +148,15 @@ def shots_out(db: Session, shots: list[models.Shot]) -> list[dict[str, Any]]:
                 "state_name": state_name,
             }
         )
+    from app.services import finals
+
     shown = previews(db, EntityType.SHOT, ids)
     counts = file_counts(db, EntityType.SHOT, ids)
+    final_files = finals.resolve(db, shots)
     out = []
     for shot in shots:
         item = column_dict(shot)
+        item["final"] = final_info(final_files.get(shot.id))
         item["scene_number"] = scene_numbers.get(shot.scene_id)
         item["assets"] = links.get(shot.id, [])
         item["files_count"] = counts.get(shot.id, 0)
@@ -343,11 +369,18 @@ def files_out(db: Session, files: list[models.File]) -> list[dict[str, Any]]:
     active, failed = jobs.file_activity(db, [f.id for f in files])
     uploaders = authors(db, {f.uploaded_by for f in files})
     topic_titles = _topic_titles(db, files)
+    from app.services import versions
+
+    version_counts = versions.counts(db, files)
     out = []
     for f in files:
         out.append(
             {
                 "id": f.id,
+                "version_group_id": f.version_group_id,
+                "version_no": f.version_no,
+                "is_current": f.is_current,
+                "versions_count": version_counts.get(f.version_group_id or 0, 1),
                 "kind": f.kind,
                 "source": f.source,
                 "original_name": f.original_name,
