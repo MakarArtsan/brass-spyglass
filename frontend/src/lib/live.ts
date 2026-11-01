@@ -83,6 +83,7 @@ class Batch {
     if (dirty.has('user')) void qc.invalidateQueries({ queryKey: ['users'] })
     // Почти всё, что происходит в проекте, видно на дашборде и в ленте.
     void qc.invalidateQueries({ queryKey: ['dashboard'] })
+    void qc.invalidateQueries({ queryKey: ['animatic'] })
     void qc.invalidateQueries({ queryKey: ['activity'] })
   }
 

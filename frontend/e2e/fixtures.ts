@@ -28,7 +28,7 @@ export const test = base.extend<{ asRole: (role: Role) => Promise<void> }>({
 export { expect }
 
 /** JSON-запрос к API от имени уже вошедшего в этом контексте пользователя. */
-export async function api<T = unknown>(page: Page, method: 'GET' | 'POST' | 'PATCH' | 'DELETE', url: string, data?: unknown): Promise<T> {
+export async function api<T = unknown>(page: Page, method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', url: string, data?: unknown): Promise<T> {
   const res = await page.context().request.fetch(`${BASE_URL}/api${url}`, { method, data })
   if (!res.ok()) throw new Error(`${method} ${url} → ${res.status()} ${await res.text()}`)
   return (res.status() === 204 ? null : await res.json()) as T
