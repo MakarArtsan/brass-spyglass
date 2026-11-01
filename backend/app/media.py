@@ -202,6 +202,29 @@ def make_proxy(
     tmp.replace(dest)
 
 
+def make_card_video(
+    card_png: Path, dest: Path, seconds: float, fps: int = 24, sample_rate: int = 48_000
+) -> None:
+    """Карточка-заглушка для экспорта: статичная картинка на `seconds` секунд, H.264 + тихая дорожка
+    звука (многие монтажки ждут звук у каждого клипа). Длина — ровно в кадры,
+    чтобы таймлайн сошёлся."""
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    frames = max(1, round(seconds * fps))
+    tmp = dest.with_suffix(".part.mov")
+    cmd = [
+        "ffmpeg", "-y", "-v", "error", "-nostats",
+        "-loop", "1", "-framerate", str(fps), "-i", str(card_png),
+        "-f", "lavfi", "-i", f"anullsrc=r={sample_rate}:cl=stereo",
+        "-frames:v", str(frames), "-t", f"{frames / fps:.4f}",
+        "-c:v", "libx264", "-preset", "ultrafast", "-tune", "stillimage", "-pix_fmt", "yuv420p",
+        "-r", str(fps), "-c:a", "aac", "-b:a", "64k", "-shortest", str(tmp),
+    ]  # fmt: skip
+    _run(cmd, timeout=300)
+    if not tmp.exists():
+        raise MediaError("ffmpeg не сделал карточку-заглушку")
+    tmp.replace(dest)
+
+
 def waveform(src: Path, duration: float | None, buckets: int = WAVE_BUCKETS) -> list[float]:
     """Огибающая громкости для плеера: `buckets` значений 0…1. Читает поток ffmpeg кусками,
     поэтому длинные файлы не копятся в памяти."""
