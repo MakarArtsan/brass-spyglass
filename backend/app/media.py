@@ -213,11 +213,14 @@ def make_card_video(
     tmp = dest.with_suffix(".part.mov")
     cmd = [
         "ffmpeg", "-y", "-v", "error", "-nostats",
-        "-loop", "1", "-framerate", str(fps), "-i", str(card_png),
+        "-i", str(card_png),
         "-f", "lavfi", "-i", f"anullsrc=r={sample_rate}:cl=stereo",
+        # картинка читается один раз и повторяется фильтром: в три раза быстрее, чем -loop 1
+        "-vf", f"format=yuv420p,loop=loop=-1:size=1:start=0,fps={fps}",
         "-frames:v", str(frames), "-t", f"{frames / fps:.4f}",
-        "-c:v", "libx264", "-preset", "ultrafast", "-tune", "stillimage", "-pix_fmt", "yuv420p",
-        "-r", str(fps), "-c:a", "aac", "-b:a", "64k", "-shortest", str(tmp),
+        "-c:v", "libx264", "-preset", "ultrafast", "-tune", "stillimage",
+        "-x264-params", "keyint=240:scenecut=0",
+        "-r", str(fps), "-c:a", "aac", "-b:a", "64k", str(tmp),
     ]  # fmt: skip
     _run(cmd, timeout=300)
     if not tmp.exists():

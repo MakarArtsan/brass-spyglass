@@ -370,7 +370,7 @@ def format_srt(items: Sequence[Subtitle], fps: int = FPS) -> str:
 
 def timecode(frame: int, fps: int = FPS) -> str:
     """Кадр от начала → «01:00:03:12» (с учётом старта секвенции)."""
-    total = frame + START_FRAME
+    total = frame + 3600 * fps  # старт секвенции 01:00:00:00
     hours, rest = divmod(total, 3600 * fps)
     minutes, rest = divmod(rest, 60 * fps)
     seconds, frames = divmod(rest, fps)

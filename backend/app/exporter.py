@@ -216,7 +216,7 @@ def build_timeline(spec: PackageSpec) -> tuple[otio.schema.Timeline, dict[str, s
     Возвращает таймлайн и комментарии маркеров (OTIO-адаптер FCP7 их не пишет, дописываем в XML)."""
     rate = spec.fps
     timeline = otio.schema.Timeline(
-        name=spec.project_title, global_start_time=RT(ep.START_FRAME, rate)
+        name=spec.project_title, global_start_time=RT(3600 * rate, rate)
     )
     video = otio.schema.Track(name="V1", kind=otio.schema.TrackKind.Video)
     comments: dict[str, str] = {}
