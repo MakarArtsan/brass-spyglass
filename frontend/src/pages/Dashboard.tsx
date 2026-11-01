@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { Countdown } from '@/components/Countdown'
+import { SectionInfo } from '@/components/SectionInfo'
 import { Tile } from '@/components/dashboard/primitives'
 import { StatusChip } from '@/components/StatusChip'
 import { STATUS_ORDER } from '@/brand'
@@ -47,7 +48,10 @@ export default function Dashboard() {
     <section className="space-y-6">
       <div>
         <p className="mono text-xs uppercase tracking-[0.2em] text-brass">{ru.dashboard.welcome}</p>
-        <h1 className="mt-1 text-4xl">{ru.dashboard.hello(me.user.name)}</h1>
+        <div className="mt-1 flex items-center gap-1">
+          <h1 className="text-4xl">{ru.dashboard.hello(me.user.name)}</h1>
+          <SectionInfo path="/" />
+        </div>
       </div>
 
       {!project && <div aria-hidden className="min-h-[220px]" />}

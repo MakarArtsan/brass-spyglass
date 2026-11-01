@@ -1,6 +1,7 @@
 import { Images } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Avatar } from '@/components/Avatar'
+import { SectionInfo } from '@/components/SectionInfo'
 import { useUsers } from '@/hooks/useAuth'
 import { ru } from '@/ru'
 
@@ -10,7 +11,10 @@ export default function Team() {
   const { data: users } = useUsers()
   return (
     <section>
-      <h1 className="text-4xl">{ru.team.title}</h1>
+      <div className="flex items-center gap-1">
+        <h1 className="text-4xl">{ru.team.title}</h1>
+        <SectionInfo path="/team" />
+      </div>
       <p className="mt-1 text-fog">{ru.team.lead}</p>
       <ul className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {users?.map((u) => (

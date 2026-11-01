@@ -1,4 +1,5 @@
 import { Hourglass } from 'lucide-react'
+import { SectionInfo } from '@/components/SectionInfo'
 import { Navigate } from 'react-router-dom'
 import { useMe } from '@/hooks/useAuth'
 import { NAV } from '@/nav'
@@ -13,7 +14,10 @@ export default function Placeholder({ path }: { path: string }) {
   return (
     <section className="mx-auto flex max-w-xl flex-col items-center gap-4 py-16 text-center">
       <item.icon className="text-brass" size={40} aria-hidden />
-      <h1 className="text-4xl">{item.label}</h1>
+      <div className="flex items-center gap-1">
+        <h1 className="text-4xl">{item.label}</h1>
+        <SectionInfo path={path} />
+      </div>
       {item.note && <p className="text-fog">{item.note}</p>}
       <p className="mono inline-flex items-center gap-2 rounded-full border border-line px-4 py-1.5 text-xs uppercase tracking-wider text-fog">
         <Hourglass size={14} aria-hidden />
