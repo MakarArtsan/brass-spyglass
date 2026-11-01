@@ -140,6 +140,7 @@ export const ru = {
     notConnected: 'Не подключён',
     notConfigured: 'Не настроен: задайте TG_SESSION и TG_CHAT_ID в переменных Amvera и перезапустите проект.',
     notConnectedHint: 'Настроен, но сессия не подключилась: проверьте TG_SESSION и доступ аккаунта к чату.',
+    notConnectedReason: 'Причина',
     syncState: 'Синхронизация',
     syncing: 'Идёт чтение чата',
     idle: 'Ждёт новых сообщений',

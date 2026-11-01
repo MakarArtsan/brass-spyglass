@@ -9,10 +9,11 @@ import contextlib
 import io
 import logging
 import re
+import struct
 from datetime import timedelta
 from pathlib import Path
 
-from telethon import TelegramClient, events
+from telethon import TelegramClient, errors, events
 from telethon.sessions import StringSession
 
 from app import db as database
@@ -30,6 +31,9 @@ from app.services import users
 
 log = logging.getLogger(__name__)
 
+CONNECT_ATTEMPTS = 3
+CONNECT_PAUSE_SEC = 3
+
 START_RE = re.compile(r"^/start(?:@\w+)?(?:\s+(\S+))?\s*$")
 
 MSG_HELLO = (
@@ -43,6 +47,42 @@ MSG_UNAVAILABLE = "Не удалось проверить участие в ча
 MSG_OK = "Готово, {name}! Вы вошли на сайт — вернитесь в браузер."
 
 
+def explain_userbot_error(exc: BaseException) -> str:
+    """Причина, по которой юзербот не подключился, — по-русски и с тем, что делать.
+    Её видно на экране «Telegram», чтобы не лазить в логи."""
+    name = exc.__class__.__name__
+    if isinstance(exc, errors.AuthKeyDuplicatedError):
+        return (
+            "Одну и ту же сессию использовали с двух мест одновременно (например, на старой "
+            "и новой копии приложения при деплое), и Telegram её аннулировал. Выпустите новую "
+            "(make_session.py), задайте TG_SESSION и перезапустите приложение один раз."
+        )
+    if isinstance(
+        exc,
+        errors.AuthKeyUnregisteredError
+        | errors.SessionRevokedError
+        | errors.SessionExpiredError
+        | errors.AuthKeyInvalidError,
+    ):
+        return (
+            "Telegram больше не принимает эту сессию (её завершили или она устарела). "
+            "Выпустите новую (make_session.py) и задайте TG_SESSION."
+        )
+    if isinstance(exc, errors.UserDeactivatedError | errors.UserDeactivatedBanError):
+        return "Аккаунт юзербота заблокирован или удалён Telegram. Нужен другой аккаунт."
+    if isinstance(exc, errors.ApiIdInvalidError):
+        return "TG_API_ID и TG_API_HASH не подходят друг другу или неверны (my.telegram.org)."
+    if isinstance(exc, ValueError | struct.error):
+        return (
+            "TG_SESSION не похожа на сессию: скопирована не полностью или с лишним. "
+            "Это одна длинная строка (около 350 знаков, начинается с «1»), "
+            "её make_session.py печатает целиком."
+        )
+    if isinstance(exc, OSError | TimeoutError):
+        return f"Нет связи с Telegram ({name}: {exc}). Приложение попробовало несколько раз."
+    return f"{name}: {exc}" if str(exc) else name
+
+
 class TelegramService:
     """Подключения к Telegram. Без ключей приложение работает, но войти нельзя."""
 
@@ -54,6 +94,7 @@ class TelegramService:
         self.membership: MembershipChecker = DisabledMembership()
         self.bot_username: str = settings.tg_bot_username.lstrip("@")
         self._recheck_task: asyncio.Task[None] | None = None
+        self.userbot_error: str | None = None  # почему юзербот не подключён (для экрана «Telegram»)
 
     @property
     def login_available(self) -> bool:
@@ -80,24 +121,45 @@ class TelegramService:
             return
 
         if s.tg_session and s.tg_chat_id is not None:
-            try:
-                self.userbot = TelegramClient(
-                    StringSession(s.tg_session), s.tg_api_id, s.tg_api_hash
-                )
-                await self.userbot.connect()
-                if await self.userbot.is_user_authorized():
-                    self.membership = TelethonMembership(self.userbot, s.tg_chat_id)
-                else:
-                    log.error("сессия юзербота недействительна (TG_SESSION)")
-                    await self.userbot.disconnect()
-                    self.userbot = None
-            except Exception:
-                log.exception("не удалось подключить юзербота")
-                self.userbot = None
+            await self._connect_userbot(s.tg_api_id, s.tg_session, s.tg_chat_id)
         else:
             log.warning("TG_SESSION или TG_CHAT_ID не заданы: членство в чате не проверяется")
 
         self._recheck_task = asyncio.create_task(self._recheck_loop(), name="membership-recheck")
+
+    async def _connect_userbot(self, api_id: int, session: str, chat_id: int) -> None:
+        """Подключает юзербота. Сбои связи повторяются (на старте сеть бывает не готова),
+        остальное сразу уходит в `userbot_error`: неверная сессия от повтора не исправится."""
+        for attempt in range(1, CONNECT_ATTEMPTS + 1):
+            client: TelegramClient | None = None
+            try:
+                client = TelegramClient(StringSession(session), api_id, self.settings.tg_api_hash)
+                await client.connect()
+                if not await client.is_user_authorized():
+                    await client.disconnect()
+                    self.userbot_error = (
+                        "Telegram не принимает эту сессию (TG_SESSION): она не авторизована. "
+                        "Выпустите новую (make_session.py) и задайте TG_SESSION."
+                    )
+                    log.error("сессия юзербота недействительна (TG_SESSION)")
+                    return
+                self.userbot = client
+                self.membership = TelethonMembership(client, chat_id)
+                self.userbot_error = None
+                return
+            except Exception as exc:
+                transient = isinstance(exc, OSError | TimeoutError)
+                self.userbot_error = explain_userbot_error(exc)
+                log.error(
+                    "не удалось подключить юзербота (попытка %s): %s", attempt, self.userbot_error
+                )
+                if client is not None:
+                    with contextlib.suppress(Exception):
+                        await client.disconnect()  # type: ignore[misc]
+                if not transient or attempt == CONNECT_ATTEMPTS:
+                    log.debug("подробности", exc_info=True)
+                    return
+                await asyncio.sleep(CONNECT_PAUSE_SEC * attempt)
 
     async def stop(self) -> None:
         if self._recheck_task:

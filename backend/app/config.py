@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import computed_field
+from pydantic import computed_field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -34,6 +34,15 @@ class Settings(BaseSettings):
     # Кэш просмотра не скачанных файлов Telegram: старые файлы удаляются, когда кэш больше этого.
     tg_preview_cache_mb: int = 500
     membership_recheck_hours: int = 24
+
+    @field_validator("tg_session", mode="before")
+    @classmethod
+    def _clean_session(cls, value: object) -> object:
+        """StringSession — одна длинная строка base64 без пробелов. При копировании в переменную
+        легко прихватить кавычки, пробелы или перенос строки: убираем их, а не падаем."""
+        if isinstance(value, str):
+            return "".join(value.split()).strip("'\"")
+        return value
 
     @computed_field  # type: ignore[prop-decorator]
     @property

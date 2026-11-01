@@ -44,7 +44,14 @@ export default function Telegram() {
             <p className={cn('mt-1 text-lg font-semibold', status.connected ? 'text-status-done' : 'text-alert')}>
               {status.connected ? ru.tg.connected : ru.tg.notConnected}
             </p>
-            {!status.connected && <p className="mt-1 text-sm text-fog">{status.configured ? ru.tg.notConnectedHint : ru.tg.notConfigured}</p>}
+            {!status.connected && (
+              <p className="mt-1 text-sm text-fog">{status.configured ? (status.userbot_error ? null : ru.tg.notConnectedHint) : ru.tg.notConfigured}</p>
+            )}
+            {!status.connected && status.userbot_error && (
+              <p className="mt-1 text-sm text-alert" role="alert">
+                {ru.tg.notConnectedReason}: {status.userbot_error}
+              </p>
+            )}
           </div>
           <div>
             <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-fog">{ru.tg.syncState}</h2>
