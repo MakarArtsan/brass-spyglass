@@ -15,8 +15,8 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app import db as database
 from app import events, uploads
+from app.api import animatic, dashboard, entities, health, me
 from app.api import auth as auth_api
-from app.api import dashboard, entities, health, me
 from app.api import events as events_api
 from app.api import files as files_api
 from app.api import telegram as telegram_api
@@ -149,6 +149,7 @@ def create_app() -> FastAPI:
     app.include_router(me.router, prefix="/api")
     app.include_router(entities.router, prefix="/api")
     app.include_router(dashboard.router, prefix="/api")
+    app.include_router(animatic.router, prefix="/api")
     app.include_router(telegram_api.router, prefix="/api")
     app.include_router(files_api.router, prefix="/api")
     app.include_router(events_api.router, prefix="/api")
