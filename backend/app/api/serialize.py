@@ -202,7 +202,12 @@ def assets_out(db: Session, assets: list[models.Asset]) -> list[dict[str, Any]]:
         ]
         item["shots_count"] = shots_in.get(asset.id, 0)
         item["files_count"] = counts.get(asset.id, 0)
-        item["preview"] = shown.get(asset.id)
+        # Лицо ассета: его собственный референс, а если их нет — первый референс его состояний
+        # (в списке персонаж выглядит как человек, а не значок, даже если фото лежат в состоянии).
+        from_state = next(
+            (state_previews[s.id] for s in states.get(asset.id, []) if s.id in state_previews), None
+        )
+        item["preview"] = shown.get(asset.id) or from_state
         out.append(item)
     return out
 
