@@ -75,7 +75,8 @@ class TelethonGateway:
     # --- Gateway -------------------------------------------------------------------------------
 
     async def topics(self) -> list[TopicInfo]:
-        from telethon.tl.functions.channels import GetForumTopicsRequest
+        # В Telethon 1.45 запрос тем — в `messages` и принимает `peer` (не `channels` и `channel`).
+        from telethon.tl.functions.messages import GetForumTopicsRequest
 
         chat = await self._chat()
         entity = await self._call(lambda: self.client.get_entity(chat))
@@ -88,7 +89,7 @@ class TelethonGateway:
         offset_date, offset_id, offset_topic = None, 0, 0
         while True:
             request = GetForumTopicsRequest(
-                channel=chat,
+                peer=chat,
                 offset_date=offset_date,
                 offset_id=offset_id,
                 offset_topic=offset_topic,
