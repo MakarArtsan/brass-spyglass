@@ -21,7 +21,7 @@ function Ruler({ total, pps }: { total: number; pps: number }) {
   return (
     <div className="relative border-b border-line" style={{ height: H.ruler }} aria-hidden>
       {marks.map((t) => (
-        <span key={t} className="mono absolute top-1 -translate-x-1/2 text-[10px] text-fog" style={{ left: t * pps }}>
+        <span key={t} className={cn('mono absolute top-1 text-[10px] text-fog', t > 0 && '-translate-x-1/2')} style={{ left: t * pps }}>
           {clock(t)}
         </span>
       ))}

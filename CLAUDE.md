@@ -54,7 +54,9 @@ backend/app/
   models.py                 вся схема данных (SQLAlchemy 2)
   db.py                     SQLite в режиме WAL, UTCDateTime (наивное время запрещено)
   permissions.py            матрица ролей из ТЗ — единственное место
-  metrics.py                вычисляемое: таймкоды, суммы, готовность, дашборд, сгорание (с тестами)
+  metrics.py                вычисляемое: таймкоды, суммы, готовность, дашборд, сгорание, раскладка таймлайна (с тестами)
+  export_plan.py, exporter.py  экспорт в Resolve/Premiere: чистый план (порядок, кадры, звук, SRT) и сборка zip (OTIO, FCP7 XML)
+  backup.py, maintenance.py ночные бэкапы базы (VACUUM INTO, 14 копий, отправка владельцу) и фоновое обслуживание
   events.py                 шина событий SSE: события копятся в сессии и уходят после коммита
   storage.py                занятое место на /data, лимит проекта (`ensure_room` — отказ при нехватке)
   linkpreview.py            карточка ссылки (Open Graph) с защитой от SSRF
@@ -67,12 +69,16 @@ backend/app/
     ordering.py, links.py   порядок сцен/шотов; привязки шот↔ассет и файл↔карточка
     files.py, jobs.py       файлы (дубли по sha256, метаданные, ссылки) и очередь фоновых задач
     telegram.py             индекс чата и импорт выбранного в карточки (вся запись в БД по Telegram)
+    versions.py, finals.py  версии файлов (v1, v2…, откат) и финальный файл сцены/шота
+    exports.py              план экспорта из базы, задача export, история, срок хранения 7 дней
+    notifications.py        уведомления на сайте (комментарий/файл/версия на карточке → остальным)
   uploads.py                загрузка кусками с докачкой: состояние на диске (/data/cache/uploads)
   media.py, worker.py       ffprobe/ffmpeg/Pillow: превью, прокси H.264 720p, волна; исполнитель очереди
   signing.py                подписанные ссылки на файлы (TTL 1 ч)
   auth/                     вход: токены, бот и юзербот (Telethon), сессия-cookie, Login Widget
-  api/                      роутеры FastAPI: entities, files (загрузка, медиатека, ссылки), dashboard,
-                            events (SSE), telegram (окно «Добавить из Telegram»), serialize
+  api/                      роутеры FastAPI: entities, files (загрузка, версии, медиатека, ссылки), dashboard,
+                            events (SSE), telegram (окно «Добавить из Telegram»), animatic, exports,
+                            notifications, serialize
   main.py                   lifespan: миграции → проект → сид → Telegram → воркер; раздача React
 backend/seed/               Krivoe_zerkalo_tracker.xlsx — стартовые данные
 backend/scripts/            import_xlsx.py, dev_session.py, make_session.py
@@ -86,7 +92,7 @@ frontend/src/
   components/               StatusPill, CardPanel, Comments, Uploads, … ; media/ — плееры и медиатека;
                             dashboard/ — виджеты на SVG; telegram/ — окно импорта и прогресс
   pages/                    Shots, Scenes, Assets, Setups, Sound, Tasks, Media, Telegram, Journal, Dashboard
-                            (+ DashboardTiles — ленивый чанк графиков)
+                            (+ DashboardTiles — ленивый чанк графиков), Animatic, Export
 frontend/e2e/               Playwright (desktop 1440 + phone 390); fixtures.ts, screenshots.mjs
 ```
 
@@ -117,6 +123,14 @@ frontend/e2e/               Playwright (desktop 1440 + phone 390); fixtures.ts, 
 - **Фронтенд, скорость первого показа** (критерий Lighthouse ≥ 90 на дашборде): запросы стартуют из
   `index.html` (`window.__early`), тяжёлое под сгибом — в `Deferred`/ленивых чанках, в компонентах
   `m` из `framer-motion`, а не `motion`; не добавлять тяжёлые библиотеки в начальный набор.
+- **Версии файлов**: «новая версия» не затирает прошлые; привязки копируются на новую, откат — смена `is_current`.
+  Везде, где показываются файлы карточки или считаются файлы проекта, — только `is_current`.
+- **Финальный файл** (`final_file_id`) выбирается только через `services/finals.py`; общий PATCH его не принимает.
+  Показывается и экспортируется текущая версия.
+- **Экспорт**: порядок и длительности — в `export_plan.py` (чистые функции с тестами, до кадра); пакет собирает `exporter.py`.
+  Открытие в Resolve/Premiere в среде разработки не проверить — см. DECISIONS.md.
+- **Бэкапы**: задача `backup` (после 03:00 МСК), 14 копий в `/data/backups`, бот шлёт владельцу; состояние — в `/api/health`.
+- **Уведомления** — только на сайте (решение заказчика): без Telegram и без согласований.
 - **Фоновые задачи** — таблица `job` в той же БД, исполнитель `worker.py` (≤ 2 ffmpeg одновременно);
   «зависшие» задачи после перезапуска возвращаются в очередь.
 - **Удаление мягкое** (`deleted_at`), корзина 30 дней, восстанавливает владелец.

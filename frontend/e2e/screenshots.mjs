@@ -2,7 +2,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { chromium } from 'playwright'
-import { seedDemo } from './demo.mjs'
+import { makeMedia, seedDemo, upload } from './demo.mjs'
 import { BASE_URL, sessionCookie } from './session.mjs'
 
 const out = process.argv[2] ?? 'screenshots'
@@ -103,9 +103,55 @@ async function mockTelegram(page) {
   }))
 }
 
+/** Этап 3: готовые сцены с финальными файлами и версией, собранный пакет экспорта, свежие уведомления. */
+async function seedStage3(cookieOwner) {
+  const dina = sessionCookie({ name: 'Дина', tgId: 900002, username: 'dina', role: 'director' })
+  const petya = sessionCookie({ name: 'Петя', tgId: 900003, username: 'petya', role: 'team' })
+  const call = async (cookie, method, url, body) => {
+    const r = await fetch(`${BASE_URL}/api${url}`, { method, headers: { Cookie: `bs_session=${cookie}`, 'Content-Type': 'application/json', Origin: BASE_URL }, body: body ? JSON.stringify(body) : undefined })
+    if (!r.ok) throw new Error(`${method} ${url} ${r.status} ${await r.text()}`)
+    return r.status === 204 ? null : r.json()
+  }
+  const media = makeMedia()
+  const scenes = (await call(cookieOwner, 'GET', '/scenes')).sort((a, b) => a.order - b.order)
+  const finals = [media.clip, media.clip2, media.clip, media.clip2]
+  for (const [i, file] of finals.entries()) {
+    const scene = scenes[i]
+    const up = await upload(cookieOwner, file, { entity_type: 'scene', entity_id: scene.id, purpose: 'final' })
+    for (let n = 0; n < 60; n++) {
+      const f = await call(cookieOwner, 'GET', `/files/${up.file.id}`)
+      if (!f.processing && f.duration_sec) break
+      await new Promise((r) => setTimeout(r, 500))
+    }
+    await call(cookieOwner, 'PUT', `/scenes/${scene.id}/final`, { file_id: up.file.id })
+    await call(cookieOwner, 'PATCH', `/scenes/${scene.id}`, { status: 'done' })
+    if (i === 0) {
+      // вторая версия первой сцены: на плитке появится значок v2, в окне версий — история
+      const second = path.join(path.dirname(file), 'Два зеркала — v2.mp4')
+      fs.copyFileSync(media.clip2, second)
+      const init = await fetch(`${BASE_URL}/api/uploads`, { method: 'POST', headers: { Cookie: `bs_session=${dina}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: path.basename(second), size: fs.statSync(second).size }) }).then((r) => r.json())
+      const bytes = new Uint8Array(fs.readFileSync(second))
+      await fetch(`${BASE_URL}/api/uploads/${init.id}`, { method: 'PATCH', headers: { Cookie: `bs_session=${dina}`, 'Upload-Offset': '0', 'Content-Type': 'application/octet-stream' }, body: bytes })
+      await fetch(`${BASE_URL}/api/uploads/${init.id}/complete`, { method: 'POST', headers: { Cookie: `bs_session=${dina}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ version_of: up.file.id }) })
+    }
+  }
+  const shots = await call(cookieOwner, 'GET', '/shots')
+  const shot = shots.find((s) => s.code === '02.02') ?? shots[5]
+  await call(dina, 'POST', '/comments', { entity_type: 'shot', entity_id: shot.id, body: 'Давай сделаем персонажа чуть реальнее: больше фактуры на мехе.' })
+  await call(petya, 'POST', '/comments', { entity_type: 'shot', entity_id: shot.id, body: 'Согласен, и свет теплее.' })
+  const build = await call(cookieOwner, 'POST', '/exports', { target: 'resolve', level: 'scenes', placeholders: true, references: false, media_root: 'D:/BrassSpyglass/' })
+  for (let n = 0; n < 120; n++) {
+    const h = await call(cookieOwner, 'GET', '/exports')
+    if (['done', 'failed'].includes(h.find((e) => e.id === build.id).status)) break
+    await new Promise((r) => setTimeout(r, 1000))
+  }
+  return { commentedShot: shot.id }
+}
+
 const cookie = sessionCookie()
 const demo = await seedDemo(cookie)
 await seedActivity(cookie)
+const stage3 = await seedStage3(cookie)
 const browser = await chromium.launch()
 
 async function shoot(name, viewport, setup, { mobile = false } = {}) {
@@ -223,6 +269,56 @@ await shoot('phone-bottom-sheet-more', phone, {
     })
   },
 }, { mobile: true })
+
+// --- этап 3 --------------------------------------------------------------------------------------------------
+for (const [label, viewport, mobile] of [['desktop', desktop, false], ['phone', phone, true]]) {
+  await shoot(`${label}-animatic`, viewport, { url: '/animatic', act: (p) => p.getByRole('link', { name: /Открыть шот/ }).first().waitFor() }, { mobile })
+  await shoot(`${label}-animatic-player`, viewport, {
+    url: '/animatic',
+    act: async (p) => {
+      await p.getByRole('button', { name: 'Смотреть фильм' }).click()
+      const player = p.getByRole('dialog', { name: 'Смотреть фильм' })
+      await player.getByRole('button', { name: /^6\./ }).click() // фрагмент без файла: карточка с описанием
+      await p.waitForTimeout(500)
+      await player.getByRole('button', { name: 'Пауза' }).click()
+    },
+  }, { mobile })
+  await shoot(`${label}-export`, viewport, {
+    url: '/export',
+    fullPage: true,
+    act: async (p) => {
+      await p.getByRole('checkbox', { name: /Плейсхолдеры/ }).check()
+      await p.getByText(/Клипов: 4 \+ заглушек/).waitFor()
+      await p.getByRole('link', { name: 'Скачать zip' }).first().waitFor()
+    },
+  }, { mobile })
+  await shoot(`${label}-notifications`, viewport, {
+    url: '/shots',
+    act: async (p) => {
+      await p.getByRole('button', { name: /^Уведомления: новых/ }).click()
+      await p.getByRole('dialog', { name: 'Уведомления' }).getByRole('button').first().waitFor()
+      await p.waitForTimeout(300)
+    },
+  }, { mobile })
+  await shoot(`${label}-scene-final`, viewport, { url: `/scenes/${demo.scene}`, fullPage: true }, { mobile })
+}
+await shoot('desktop-versions-dialog', desktop, {
+  url: `/scenes/${demo.scene}`,
+  act: async (p) => {
+    await p.getByRole('button', { name: /Показать ещё: Два зеркала/ }).first().click()
+    await p.getByRole('menuitem', { name: /Версии/ }).click()
+    await p.getByRole('dialog', { name: 'Версии файла' }).getByText('текущая').waitFor()
+  },
+})
+await shoot('phone-versions-dialog', phone, {
+  url: `/scenes/${demo.scene}`,
+  act: async (p) => {
+    await p.getByRole('button', { name: /Показать ещё: Два зеркала/ }).first().click()
+    await p.getByRole('menuitem', { name: /Версии/ }).click()
+    await p.getByRole('dialog', { name: 'Версии файла' }).getByText('текущая').waitFor()
+  },
+}, { mobile: true })
+void stage3
 
 await browser.close()
 console.log('готово →', out)

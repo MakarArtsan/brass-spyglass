@@ -143,7 +143,11 @@ test.describe('просмотр медиа на сайте', () => {
     const media = sampleMedia()
     await page.goto(`/shots?shot=${shot.id}`)
     const card = cardOf(page, isMobile)
-    await card.getByLabel('Выбрать файлы').first().setInputFiles([media.photo, media.video, media.audio])
+    // по одному: пачка грузится параллельно, и порядок плиток зависел бы от того, чей запрос завершится первым
+    for (const [i, file] of [media.photo, media.video, media.audio].entries()) {
+      await card.getByLabel('Выбрать файлы').first().setInputFiles(file)
+      await expect.poll(async () => (await filesOf(page, shot.id)).length, { timeout: 20_000 }).toBe(i + 1)
+    }
     await expect.poll(async () => (await filesOf(page, shot.id)).filter((a) => !a.file.processing).length, { timeout: 40_000 }).toBe(3)
 
     await card.getByRole('button', { name: /Открыть: photo\.png/ }).click()
