@@ -68,9 +68,12 @@ export function FileTile({ item, onOpen, onDetach, onDelete, onVersions, isFinal
         <Dropdown.Root>
           <Dropdown.Trigger
             aria-label={`${ru.common.more}: ${name}`}
-            className="absolute -right-1 top-0 flex min-h-touch min-w-touch items-center justify-center rounded-full text-fog opacity-70 transition-opacity duration-fast hover:text-paper hover:opacity-100 focus-visible:opacity-100 group-hover:opacity-100"
+            className="group/menu absolute -right-1.5 -top-1.5 flex min-h-touch min-w-touch items-center justify-center rounded-full outline-none"
           >
-            <MoreVertical size={16} />
+            {/* Область касания 44 px, а видимая кнопка — кружок на тёмной подложке: на фото значок без фона не виден */}
+            <span className="flex h-8 w-8 items-center justify-center rounded-full border border-line bg-ink/90 text-paper shadow-md shadow-black/40 transition-colors duration-fast group-hover/menu:border-brass group-focus-visible/menu:ring-2 group-focus-visible/menu:ring-brass">
+              <MoreVertical size={18} aria-hidden />
+            </span>
           </Dropdown.Trigger>
           <Dropdown.Portal>
             <Dropdown.Content align="end" sideOffset={4} className="z-[110] min-w-[200px] rounded-xl border border-line bg-chart p-1 shadow-xl shadow-black/50">
@@ -94,13 +97,15 @@ export function FileTile({ item, onOpen, onDetach, onDelete, onVersions, isFinal
                 </Dropdown.Item>
               )}
               {onDetach && (
-                <Dropdown.Item onSelect={onDetach} className="flex min-h-touch cursor-pointer items-center rounded-lg px-3 text-sm outline-none data-[highlighted]:bg-ink">
+                <Dropdown.Item onSelect={onDetach} className="flex min-h-touch cursor-pointer flex-col justify-center rounded-lg px-3 py-1.5 text-sm outline-none data-[highlighted]:bg-ink">
                   {ru.files.detach}
+                  <span className="text-[11px] text-fog">{ru.files.detachHint}</span>
                 </Dropdown.Item>
               )}
               {onDelete && (
-                <Dropdown.Item onSelect={onDelete} className="flex min-h-touch cursor-pointer items-center rounded-lg px-3 text-sm text-alert outline-none data-[highlighted]:bg-ink">
-                  {ru.common.delete}
+                <Dropdown.Item onSelect={onDelete} className="flex min-h-touch cursor-pointer flex-col justify-center rounded-lg px-3 py-1.5 text-sm text-alert outline-none data-[highlighted]:bg-ink">
+                  {ru.files.deleteFile}
+                  <span className="text-[11px] text-fog">{ru.files.deleteHint}</span>
                 </Dropdown.Item>
               )}
             </Dropdown.Content>

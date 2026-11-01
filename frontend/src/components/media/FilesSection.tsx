@@ -3,7 +3,9 @@ import { lazy, Suspense, useState } from 'react'
 import { FileTile } from '@/components/media/FileTile'
 import { dropZone, UploadButtons } from '@/components/Uploads'
 import { usePerms } from '@/hooks/usePerms'
+import { displayName } from '@/lib/files'
 import { useEntityFiles, useFileMutations } from '@/lib/queries'
+import { toast } from '@/lib/toast'
 import type { FileItem } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { ru } from '@/ru'
@@ -86,12 +88,12 @@ export function FilesSection({ title, entityType, entityId, purposes, uploadPurp
               onFinal={onSetFinal ? () => onSetFinal(finalId === a.file.id ? null : a.file.id) : undefined}
               onDetach={
                 perms.canUpload && (perms.meId === a.attached_by?.id || perms.role === 'owner' || perms.role === 'director')
-                  ? () => mutations.detach.mutate(a.attachment_id)
+                  ? () => mutations.detach.mutate(a.attachment_id, { onSuccess: () => toast(ru.files.detached) })
                   : undefined
               }
               onDelete={
                 perms.canDelete({ uploaded_by: a.file.uploaded_by })
-                  ? () => window.confirm(ru.files.deleteConfirm) && mutations.remove.mutate(a.file.id)
+                  ? () => window.confirm(ru.files.deleteConfirm(displayName(a.file))) && mutations.remove.mutate(a.file.id, { onSuccess: () => toast(ru.files.deleted) })
                   : undefined
               }
             />
