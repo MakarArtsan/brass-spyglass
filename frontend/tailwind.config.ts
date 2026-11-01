@@ -42,8 +42,10 @@ export default {
         'flip-in': { from: { opacity: '0', transform: 'translateY(-40%)' }, to: { opacity: '1', transform: 'none' } },
       },
       animation: {
-        'page-in': `page-in ${motion.fast * 1000}ms cubic-bezier(${motion.ease.join(',')}) both`,
-        'flip-in': `flip-in ${motion.base * 1000}ms cubic-bezier(${motion.ease.join(',')}) both`,
+        // Без `forwards`/`both`: иначе после анимации у элемента остаётся transform (matrix), он становится
+        // «базой» для position: fixed у потомков, и лист карточки растягивается на всю страницу вместо экрана.
+        'page-in': `page-in ${motion.fast * 1000}ms cubic-bezier(${motion.ease.join(',')}) backwards`,
+        'flip-in': `flip-in ${motion.base * 1000}ms cubic-bezier(${motion.ease.join(',')}) backwards`,
       },
       minHeight: { touch: '44px' },
       minWidth: { touch: '44px' },
