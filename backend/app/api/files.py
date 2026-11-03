@@ -18,7 +18,7 @@ from sqlalchemy import exists, func, select
 from sqlalchemy.orm import Session
 from starlette.background import BackgroundTask
 
-from app import metrics, models, permissions, signing, storage, uploads
+from app import metrics, models, permissions, scope, signing, storage, uploads
 from app.api import serialize
 from app.api.entities import ActorDep, DbDep, UserDep, input_model
 from app.auth import session
@@ -34,15 +34,11 @@ HASH_BLOCK = 1 << 20
 
 
 def _project_id(db: Session) -> int:
-    project = projects.get_project(db)
-    if project is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Проект не создан")
-    return project.id
+    return scope.current_project_id(db)
 
 
 def _project_limit_gb(db: Session) -> float:
-    project = projects.get_project(db)
-    return project.storage_limit_gb if project else 5.0
+    return projects.current(db).storage_limit_gb
 
 
 def _raise(exc: uploads.UploadError) -> None:
@@ -492,7 +488,7 @@ def serve_file(
     """Файл по подписанной ссылке и только залогиненным. Range поддерживается (перемотка)."""
     if variant not in signing.VARIANTS:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Нет такого варианта")
-    if not signing.verify(t, file_id, variant):
+    if not signing.verify(t, file_id, variant, scope.current_project_id(db)):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Ссылка недействительна или устарела")
     file = core.get(db, EntityType.FILE, file_id)
     settings = get_settings()

@@ -6,7 +6,7 @@ test.describe('лимит диска', () => {
   test('загрузка, не помещающаяся в лимит, отклоняется с понятной причиной', async ({ page, asRole, isMobile }) => {
     await asRole('owner')
     const shot = await freshShot(page, '07.06')
-    await page.route((url) => url.pathname === '/api/uploads', (route) =>
+    await page.route((url) => url.pathname === '/api/p/brass-spyglass/uploads', (route) =>
       route.request().method() === 'POST'
         ? route.fulfill({
             status: 507,
@@ -30,7 +30,7 @@ test.describe('лимит диска', () => {
       await asRole('owner')
       const real = await api<{ media: { storage: Record<string, unknown> } }>(page, 'GET', '/dashboard')
       const fake = { ...real, media: { ...real.media, storage: { used_bytes: (5 * usedPct * GIB) / 100, limit_bytes: 5 * GIB, used_pct: usedPct, warn, full } } }
-      await page.route((url) => url.pathname === '/api/dashboard', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(fake) }))
+      await page.route((url) => url.pathname === '/api/p/brass-spyglass/dashboard', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(fake) }))
       await page.goto('/')
       await mountDashboardTiles(page)
       await expect(page.getByRole('alert').filter({ hasText: text })).toBeVisible()

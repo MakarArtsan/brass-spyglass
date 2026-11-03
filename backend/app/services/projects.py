@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import models
+from app import models, scope
 from app.config import Settings, get_settings
 from app.services.core import log_activity
 
@@ -49,6 +49,14 @@ def unique_slug(db: Session, wanted: str) -> str:
     while db.scalar(select(models.Project.id).where(models.Project.slug == slug)) is not None:
         slug, n = f"{wanted}-{n}", n + 1
     return slug
+
+
+def current(db: Session) -> models.Project:
+    """Проект, в котором работает сессия (выбран `access.project_access`)."""
+    project = db.get(models.Project, scope.current_project_id(db))
+    if project is None:
+        raise scope.ProjectScopeError("Проекта нет")
+    return project
 
 
 def get_by_slug(db: Session, slug: str) -> models.Project | None:

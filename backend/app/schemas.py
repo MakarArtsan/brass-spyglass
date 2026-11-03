@@ -26,14 +26,35 @@ class AbilitiesOut(BaseModel):
 
 
 class MeOut(BaseModel):
+    """Человек в проекте: роль проекта и что она позволяет."""
+
     user: UserOut
     abilities: AbilitiesOut
+
+
+class ProjectBrief(BaseModel):
+    """Строка списка проектов человека. Чужих проектов здесь нет и названий их не узнать."""
+
+    slug: str
+    title: str
+    title_en: str
+    role: str
+    archived: bool
+
+
+class SessionOut(BaseModel):
+    """Кто вошёл и какие проекты ему открыты (вне проекта)."""
+
+    user: UserOut
+    is_superadmin: bool
+    projects: list[ProjectBrief]
 
 
 class ProjectOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    slug: str
     title: str
     title_en: str
     contest: str

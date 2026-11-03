@@ -104,8 +104,10 @@ def session_factory() -> sessionmaker[Session]:
 
 
 def get_db() -> Iterator[Session]:
-    """FastAPI-зависимость: одна транзакция на запрос."""
+    """FastAPI-зависимость: одна транзакция на запрос. Данные проектов открываются только после
+    выбора проекта (`access.project_access`); до него обращение к ним — ошибка (см. `scope.py`)."""
     with session_factory()() as db:
+        db.info["require_project"] = True
         try:
             yield db
             db.commit()

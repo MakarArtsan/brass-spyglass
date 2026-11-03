@@ -38,7 +38,8 @@ class TooManySubscribers(Exception):
 
 class EventBus:
     def __init__(self) -> None:
-        self._subscribers: set[asyncio.Queue[Payload]] = set()
+        # очередь → проект подписчика: событие уходит только подписчикам его проекта
+        self._subscribers: dict[asyncio.Queue[Payload], int | None] = {}
         self._loop: asyncio.AbstractEventLoop | None = None
 
     def bind(self, loop: asyncio.AbstractEventLoop) -> None:
@@ -57,7 +58,13 @@ class EventBus:
             loop.call_soon_threadsafe(self._deliver, payload)
 
     def _deliver(self, payload: Payload) -> None:
-        for queue in list(self._subscribers):
+        project_id = payload.get("project_id")
+        everyone = payload.get("type") == "resync"
+        for queue, subscribed in list(self._subscribers.items()):
+            # Подписчик проекта получает только события своего проекта (без проекта — никому);
+            # подписчик без проекта — внутренний (тесты, обслуживание): ему идёт всё.
+            if subscribed is not None and not everyone and project_id != subscribed:
+                continue
             try:
                 queue.put_nowait(payload)
             except asyncio.QueueFull:
@@ -67,22 +74,25 @@ class EventBus:
                 queue.put_nowait(RESYNC)
 
     @contextlib.contextmanager
-    def subscribe(self) -> Iterator[asyncio.Queue[Payload]]:
+    def subscribe(self, project_id: int | None = None) -> Iterator[asyncio.Queue[Payload]]:
         if len(self._subscribers) >= MAX_SUBSCRIBERS:
             raise TooManySubscribers
         queue: asyncio.Queue[Payload] = asyncio.Queue(QUEUE_SIZE)
-        self._subscribers.add(queue)
+        self._subscribers[queue] = project_id
         try:
             yield queue
         finally:
-            self._subscribers.discard(queue)
+            self._subscribers.pop(queue, None)
 
 
 bus = EventBus()
 
 
 def queue_event(db: Session, payload: Payload) -> None:
-    """Запоминает событие; оно уйдёт подписчикам, только если транзакция зафиксирована."""
+    """Запоминает событие; оно уйдёт подписчикам, только если транзакция зафиксирована.
+    Проект события — тот, в котором работает сессия (если не указан явно)."""
+    if payload.get("project_id") is None and db.info.get("project_id") is not None:
+        payload = {**payload, "project_id": db.info["project_id"]}
     db.info.setdefault(PENDING, []).append(payload)
 
 
@@ -107,9 +117,11 @@ def encode(payload: Payload) -> str:
     return f"data: {json.dumps(payload, ensure_ascii=False, separators=(',', ':'))}\n\n"
 
 
-async def sse_stream(source: EventBus, keepalive: float = KEEPALIVE_SEC) -> AsyncIterator[str]:
+async def sse_stream(
+    source: EventBus, project_id: int | None = None, keepalive: float = KEEPALIVE_SEC
+) -> AsyncIterator[str]:
     """Тело SSE-ответа. Отключение клиента отменяет генератор, и подписка снимается в `finally`."""
-    with source.subscribe() as queue:
+    with source.subscribe(project_id) as queue:
         yield "retry: 3000\n\n"
         yield encode({"type": "hello"})
         while True:

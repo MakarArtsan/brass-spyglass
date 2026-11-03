@@ -18,15 +18,18 @@
       // готовый ответ (один раз, только для GET). Без этого на медленной сети первый показ ждёт
       // цепочку «скрипты → запрос → ответ».
       ;(function () {
-        var path = location.pathname
-        if (path.indexOf('/login') === 0 || !window.fetch) return
+        // Адрес проекта: /p/<slug>/…; вне проекта (вход, выбор проекта) ничего заранее не просим.
+        var match = /^\/p\/([^/]+)(\/.*)?$/.exec(location.pathname)
+        if (!match || !window.fetch) return
+        var base = '/api/p/' + match[1]
+        var inner = match[2] || '/'
         var early = (window.__early = {})
         var start = function (key) {
-          early[key] = fetch('/api' + key, { credentials: 'same-origin' })
+          early[key] = fetch(base + key, { credentials: 'same-origin' })
           early[key].catch(function () {}) // ошибку обработает тот, кто заберёт ответ
         }
         start('/me')
-        if (path === '/') {
+        if (inner === '/') {
           start('/project')
           start('/dashboard')
         }

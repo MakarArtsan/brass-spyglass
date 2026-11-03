@@ -24,17 +24,17 @@ from sqlalchemy import (
 from sqlalchemy.orm import Session
 
 from app import constants as c
-from app import models, permissions
-from app.api import serialize
+from app import models, permissions, scope
+from app.api import access, serialize
 from app.auth import session
 from app.db import get_db
 from app.permissions import Actor
-from app.services import core, links, ordering, projects
+from app.services import core, links, ordering
 
 router = APIRouter(dependencies=[Depends(session.same_origin)])
 
 DbDep = Annotated[Session, Depends(get_db)]
-ActorDep = Annotated[Actor, Depends(session.actor_of)]
+ActorDep = Annotated[Actor, Depends(access.project_actor)]
 UserDep = Annotated[models.User, Depends(session.current_user)]
 
 ET = c.EntityType
@@ -133,10 +133,7 @@ def _require(entity_type: str, data: dict[str, Any]) -> None:
 
 
 def _project_id(db: Session) -> int:
-    project = projects.get_project(db)
-    if project is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Проект не создан")
-    return project.id
+    return scope.current_project_id(db)
 
 
 def _next_order(db: Session, entity_type: str, data: dict[str, Any], project_id: int) -> int:

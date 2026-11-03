@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from app import db as database
-from app import models, storage
+from app import models, scope, storage
 from app.config import Settings
 from app.constants import Role
 from app.media import MediaError
@@ -140,9 +140,12 @@ def _import_one(
     settings: Settings,
     gateway: Any,
 ) -> None:
-    sessions = database.session_factory()
     entity = (payload["entity_type"], payload["entity_id"], payload["purpose"])
     project_id = payload["project_id"]
+
+    def sessions() -> Any:  # сессия внутри проекта задачи: уведомления и записи — только в нём
+        return scope.project_session(project_id)
+
     with sessions() as db:
         row = tg_service.get_media(db, media_id)
         # Повторный выбор того же сообщения не создаёт дубль: привязываем уже загруженный файл.
@@ -157,7 +160,7 @@ def _import_one(
             db.commit()
             return
         message_id, expected = row.message_id, row.size_bytes or 0
-        project = projects.get_project(db)
+        project = db.get(models.Project, project_id)
         limit_gb = project.storage_limit_gb if project else 5.0
     storage.ensure_room(settings, limit_gb, expected)
 
@@ -198,7 +201,7 @@ def run_preview(job_id: int, media_id: int, settings: Settings) -> None:
             kind=row.kind, mime=row.mime, file_name=row.file_name,
         )  # fmt: skip
         expected = row.size_bytes or 0
-        project = projects.get_project(db)
+        project = projects.get_by_chat(db, row.chat_id)  # лимит — того проекта, чей это чат
         limit_gb = project.storage_limit_gb if project else 5.0
     if previews.cached(settings, info.message_id, info.topic_id) is not None:
         return

@@ -7,9 +7,9 @@ import { StraitMap } from '@/components/StraitMap'
 import { TelegramWidget } from '@/components/TelegramWidget'
 import { Button } from '@/components/ui/button'
 import { FILM } from '@/brand'
-import { useMe } from '@/hooks/useAuth'
 import { useTelegramLogin } from '@/hooks/useTelegramLogin'
-import { api, type AuthConfig } from '@/lib/api'
+import { api, type AuthConfig, type SessionInfo } from '@/lib/api'
+import { sessionKey } from '@/hooks/useAuth'
 import { ru } from '@/ru'
 
 const errorText = {
@@ -20,7 +20,7 @@ const errorText = {
 } as const
 
 export default function Login() {
-  const me = useMe()
+  const me = useQuery({ queryKey: sessionKey, queryFn: () => api<SessionInfo>('/session'), retry: false })
   const config = useQuery({ queryKey: ['auth-config'], queryFn: () => api<AuthConfig>('/auth/config') })
   const { state, start, cancel, widget } = useTelegramLogin()
 

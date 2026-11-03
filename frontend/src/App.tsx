@@ -1,12 +1,15 @@
 import { lazy } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Route, Routes } from 'react-router-dom'
 import { AppShell } from '@/components/AppShell'
 import { LensFilters } from '@/components/LensFilters'
 import { useMe } from '@/hooks/useAuth'
 import { ApiError } from '@/lib/api'
 import { NAV } from '@/nav'
 import { ru } from '@/ru'
+import { currentSlug } from '@/lib/project'
 import Login from '@/pages/Login'
+import ProjectMissing from '@/pages/ProjectMissing'
+import ProjectRedirect from '@/pages/ProjectRedirect'
 import NotFound from '@/pages/NotFound'
 import Placeholder from '@/pages/Placeholder'
 import Dashboard from '@/pages/Dashboard'
@@ -52,7 +55,11 @@ function Protected() {
       </div>
     )
   }
-  if (error instanceof ApiError && error.status === 401) return <Navigate to="/login" replace />
+  if (error instanceof ApiError && error.status === 401) {
+    window.location.assign('/login')
+    return null
+  }
+  if (error instanceof ApiError && error.status === 404) return <ProjectMissing />
   if (error || !me) {
     return (
       <div role="alert" className="flex min-h-dvh flex-col items-center justify-center gap-3">
@@ -85,10 +92,18 @@ export default function App() {
   return (
     <>
       <LensFilters />
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/*" element={<Protected />} />
-      </Routes>
+      {currentSlug ? (
+        // Внутри проекта (`/p/<slug>/…`): роутер работает с basename проекта, ссылки остаются прежними.
+        <Routes>
+          <Route path="/*" element={<Protected />} />
+        </Routes>
+      ) : (
+        // Вне проектов: вход и переход в свой проект (в том числе со старых ссылок вида `/shots`).
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/*" element={<ProjectRedirect />} />
+        </Routes>
+      )}
     </>
   )
 }

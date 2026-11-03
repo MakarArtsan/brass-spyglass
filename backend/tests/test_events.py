@@ -7,7 +7,7 @@ import threading
 import pytest
 from sqlalchemy.orm import Session
 
-from app import events
+from app import events, scope
 from app.constants import JobType
 from app.events import EventBus
 from app.services import jobs
@@ -59,6 +59,7 @@ async def test_event_is_sent_only_after_commit(bus: EventBus, db: Session, actor
             "entity_type": "shot",
             "entity_id": 7,
             "actor_id": actor,
+            "project_id": scope.current_project_id(db),  # по нему шина выбирает подписчиков проекта
         }
 
 
@@ -173,19 +174,38 @@ def test_stream_user_accepts_a_member_and_rejects_revoked(client):
 
     from app import db as database
     from app import models
-    from app.api.events import stream_user
+    from app.api.events import stream_project
     from app.auth import session
     from tests.conftest import login
 
     login(client, "team", "Анна")
     cookie = client.cookies.get("bs_session")
-    assert isinstance(stream_user(cookie), int)
+    assert isinstance(stream_project("brass-spyglass", cookie), int)
+    with pytest.raises(HTTPException) as foreign:  # чужого или несуществующего проекта нет
+        stream_project("no-such-project", cookie)
+    assert foreign.value.status_code == 404
 
     with database.session_factory()() as db:
         user = db.query(models.User).filter_by(name="Анна").one()
         user.access_revoked_at = datetime.now(UTC)
         db.commit()
     with pytest.raises(HTTPException) as exc:
-        stream_user(cookie)
+        stream_project("brass-spyglass", cookie)
     assert exc.value.status_code == 401
     assert session.read(None) is None
+
+
+async def test_a_project_subscriber_gets_only_events_of_its_project(bus: EventBus):
+    with bus.subscribe(1) as one, bus.subscribe(2) as two:
+        bus.publish({"type": "activity", "entity_id": 1, "project_id": 1})
+        bus.publish({"type": "activity", "entity_id": 2, "project_id": 2})
+        bus.publish(
+            {"type": "activity", "entity_id": 3}
+        )  # без проекта: не уходит никому из проектов
+        bus.publish({"type": "resync"})  # «перечитайте всё» — всем
+        await asyncio.sleep(0.05)
+        got_one = [one.get_nowait() for _ in range(one.qsize())]
+        got_two = [two.get_nowait() for _ in range(two.qsize())]
+    assert [e.get("entity_id") for e in got_one if e["type"] == "activity"] == [1]
+    assert [e.get("entity_id") for e in got_two if e["type"] == "activity"] == [2]
+    assert {"type": "resync"} in got_one and {"type": "resync"} in got_two

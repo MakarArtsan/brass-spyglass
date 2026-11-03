@@ -14,7 +14,6 @@ from app.config import get_settings
 from app.db import utcnow
 from app.permissions import Actor
 from app.services import projects
-from app.services.core import NotFoundError
 
 router = APIRouter(dependencies=[Depends(session.same_origin)])
 
@@ -76,9 +75,7 @@ def _changes(diff: dict[str, Any]) -> dict[str, Any]:
 
 @router.get("/dashboard")
 def get_dashboard(db: DbDep, user: UserDep, actor: ActorDep) -> dict[str, Any]:
-    project = projects.get_project(db)
-    if project is None:
-        raise NotFoundError("Проект не создан")
+    project = projects.current(db)
     data = metrics.dashboard_data(db, project, get_settings(), utcnow(), user.id)
     data["feed"] = _feed(db) if _can_see_feed(actor) else []
     ids: set[int | None] = {c["user_id"] for c in data["contribution"]}

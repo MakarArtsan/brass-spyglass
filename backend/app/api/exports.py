@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import export_plan as ep
-from app import models, permissions
+from app import models, permissions, scope
 from app.api import serialize
 from app.api.entities import ActorDep, DbDep
 from app.auth import session
@@ -90,6 +90,7 @@ def preview(
 
 
 def _item(
+    db: Session,
     row: models.ExportJob,
     job: models.Job | None,
     people: dict[int, dict[str, Any]],
@@ -114,7 +115,9 @@ def _item(
         "expires_at": exports.expires_at(row),
         "expired": bool(options.get("expired")) or (not available and row.result_path is not None),
         "available": available,
-        "download_url": f"/api/exports/{row.id}/download" if available else None,
+        "download_url": f"/api/p/{db.info[scope.PROJECT_SLUG]}/exports/{row.id}/download"
+        if available
+        else None,
     }
 
 
@@ -127,7 +130,7 @@ def _history(db: Session) -> list[dict[str, Any]]:
         )
     }
     people = serialize.authors(db, {r.created_by for r in rows})
-    return [_item(r, jobs_by_id.get(r.job_id) if r.job_id else None, people) for r in rows]
+    return [_item(db, r, jobs_by_id.get(r.job_id) if r.job_id else None, people) for r in rows]
 
 
 @router.get("/subtitles.srt")
@@ -165,7 +168,7 @@ def create_export(body: ExportIn, request: Request, db: DbDep, actor: ActorDep) 
     request.app.state.jobs.wake()
     db.flush()
     job = db.get(models.Job, row.job_id) if row.job_id else None
-    return _item(row, job, serialize.authors(db, {row.created_by}))
+    return _item(db, row, job, serialize.authors(db, {row.created_by}))
 
 
 @router.get("/exports/{export_id}/download")

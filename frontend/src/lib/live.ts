@@ -1,6 +1,7 @@
 import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { invalidateResource, type Resource } from '@/lib/queries'
+import { apiHref } from '@/lib/project'
 
 /**
  * Живые обновления: один поток SSE на вкладку. В событиях только «что изменилось»; данные клиент
@@ -108,7 +109,7 @@ export function useLiveUpdates(enabled: boolean): void {
     let closed = false
 
     const connect = () => {
-      source = new EventSource('/api/events')
+      source = new EventSource(apiHref('/events'))
       source.onopen = () => {
         retryMs = RETRY_MIN_MS
         // Пока связи не было, мы могли пропустить события: перечитываем всё, что на экране.

@@ -29,14 +29,14 @@ async function call(cookie, method, url, body, extra = {}) {
 
 export async function upload(cookie, file, target) {
   const data = new Uint8Array(fs.readFileSync(file))
-  const init = await call(cookie, 'POST', '/api/uploads', { name: path.basename(file), size: data.length })
-  await call(cookie, 'PATCH', `/api/uploads/${init.id}`, data, { 'Upload-Offset': '0', 'Content-Type': 'application/octet-stream' })
-  return call(cookie, 'POST', `/api/uploads/${init.id}/complete`, { ...target, force: true })
+  const init = await call(cookie, 'POST', '/api/p/brass-spyglass/uploads', { name: path.basename(file), size: data.length })
+  await call(cookie, 'PATCH', `/api/p/brass-spyglass/uploads/${init.id}`, data, { 'Upload-Offset': '0', 'Content-Type': 'application/octet-stream' })
+  return call(cookie, 'POST', `/api/p/brass-spyglass/uploads/${init.id}/complete`, { ...target, force: true })
 }
 
 export async function seedDemo(cookie) {
   const media = makeMedia()
-  const shots = await call(cookie, 'GET', '/api/shots')
+  const shots = await call(cookie, 'GET', '/api/p/brass-spyglass/shots')
   const first = shots.find((s) => s.code === '01.01')
   const second = shots.find((s) => s.code === '01.03')
   await upload(cookie, media.clip, { entity_type: 'shot', entity_id: first.id, purpose: 'take' })
@@ -44,17 +44,17 @@ export async function seedDemo(cookie) {
   await upload(cookie, media.still, { entity_type: 'shot', entity_id: first.id, purpose: 'reference' })
   await upload(cookie, media.tone, { entity_type: 'shot', entity_id: first.id, purpose: 'reference' })
   await upload(cookie, media.still, { entity_type: 'shot', entity_id: second.id, purpose: 'reference' })
-  const assets = await call(cookie, 'GET', '/api/assets')
+  const assets = await call(cookie, 'GET', '/api/p/brass-spyglass/assets')
   const sheep = assets.find((a) => a.code === 'AN-01')
   await upload(cookie, media.still, { entity_type: 'asset_state', entity_id: sheep.states[1].id, purpose: 'reference' })
 
   // статусы разных цветов, чтобы список выглядел живым
   const cycle = ['done', 'done', 'in_progress', 'review', 'rework', 'in_progress', 'done', 'not_started']
-  for (const [i, s] of shots.slice(0, 18).entries()) await call(cookie, 'PATCH', `/api/shots/${s.id}`, { status: cycle[i % cycle.length] })
-  await call(cookie, 'POST', '/api/comments', { entity_type: 'shot', entity_id: first.id, body: 'Нужен ракурс чуть ниже, чтобы обе трубы были в кадре.' })
+  for (const [i, s] of shots.slice(0, 18).entries()) await call(cookie, 'PATCH', `/api/p/brass-spyglass/shots/${s.id}`, { status: cycle[i % cycle.length] })
+  await call(cookie, 'POST', '/api/p/brass-spyglass/comments', { entity_type: 'shot', entity_id: first.id, body: 'Нужен ракурс чуть ниже, чтобы обе трубы были в кадре.' })
   // ждём, пока воркер доделает превью
   for (let i = 0; i < 60; i++) {
-    const files = await call(cookie, 'GET', `/api/files?entity_type=shot&entity_id=${first.id}`)
+    const files = await call(cookie, 'GET', `/api/p/brass-spyglass/files?entity_type=shot&entity_id=${first.id}`)
     if (files.every((f) => !f.file.processing)) break
     await new Promise((r) => setTimeout(r, 500))
   }

@@ -82,22 +82,22 @@ const TG_ITEMS = Array.from({ length: 24 }, (_, i) => 24 - i).map((id) => ({
   grouped_id: id === 23 || id === 22 ? 555 : null,
   author_name: ['Лена', 'Петя', 'Дина'][id % 3], posted_at: `2026-10-30T${String(8 + (id % 14)).padStart(2, '0')}:10:00Z`,
   size_bytes: 1000, duration_sec: id === 21 ? 12 : null,
-  thumb_url: id === 19 ? null : `/api/tg/media/${id}/thumb?t=x`, imported_file_id: id === 20 ? 9 : null,
+  thumb_url: id === 19 ? null : `/api/p/brass-spyglass/tg/media/${id}/thumb?t=x`, imported_file_id: id === 20 ? 9 : null,
   open_url: `https://t.me/c/1234567890/5/${2000 + id}`,
 }))
 const TG_TOPICS = [
-  { topic_id: 5, title: 'Персонажи', icon_emoji: null, media_count: 24, last_synced_at: '2026-10-30T12:00:00Z', history_complete: true, latest_thumb_url: '/api/tg/media/24/thumb?t=x' },
-  { topic_id: 9, title: 'Локации', icon_emoji: null, media_count: 17, last_synced_at: '2026-10-30T12:00:00Z', history_complete: true, latest_thumb_url: '/api/tg/media/3/thumb?t=x' },
+  { topic_id: 5, title: 'Персонажи', icon_emoji: null, media_count: 24, last_synced_at: '2026-10-30T12:00:00Z', history_complete: true, latest_thumb_url: '/api/p/brass-spyglass/tg/media/24/thumb?t=x' },
+  { topic_id: 9, title: 'Локации', icon_emoji: null, media_count: 17, last_synced_at: '2026-10-30T12:00:00Z', history_complete: true, latest_thumb_url: '/api/p/brass-spyglass/tg/media/3/thumb?t=x' },
   { topic_id: 12, title: 'Звук и музыка', icon_emoji: null, media_count: 6, last_synced_at: '2026-10-30T12:00:00Z', history_complete: false, latest_thumb_url: null },
 ]
 
 async function mockTelegram(page) {
   const json = (route, body) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) })
-  await page.route((u) => u.pathname === '/api/tg/topics', (r) => json(r, TG_TOPICS))
+  await page.route((u) => u.pathname === '/api/p/brass-spyglass/tg/topics', (r) => json(r, TG_TOPICS))
   await page.route((u) => u.pathname.endsWith('/thumb'), (r) => r.fulfill({ contentType: 'image/png', body: gradientPng(Number(r.request().url().match(/media\/(\d+)\//)?.[1] ?? 1) * 9) }))
-  await page.route((u) => u.pathname === '/api/tg/media', (r) => json(r, { items: TG_ITEMS, next_before_id: null }))
-  await page.route((u) => u.pathname === '/api/tg/jobs', (r) => json(r, []))
-  await page.route((u) => u.pathname === '/api/tg/status', (r) => json(r, {
+  await page.route((u) => u.pathname === '/api/p/brass-spyglass/tg/media', (r) => json(r, { items: TG_ITEMS, next_before_id: null }))
+  await page.route((u) => u.pathname === '/api/p/brass-spyglass/tg/jobs', (r) => json(r, []))
+  await page.route((u) => u.pathname === '/api/p/brass-spyglass/tg/status', (r) => json(r, {
     configured: true, connected: true, chat_id: -1001234567890, syncing: true, phase: 'thumbs', topic: null, thumbs_left: 23,
     last_error: null, last_run_at: '2026-10-30T12:00:00Z', overview: { topics: 3, media: 47, topics_complete: 2, last_synced_at: '2026-10-30T12:00:00Z' },
   }))
@@ -129,10 +129,10 @@ async function seedStage3(cookieOwner) {
       // вторая версия первой сцены: на плитке появится значок v2, в окне версий — история
       const second = path.join(path.dirname(file), 'Два зеркала — v2.mp4')
       fs.copyFileSync(media.clip2, second)
-      const init = await fetch(`${BASE_URL}/api/uploads`, { method: 'POST', headers: { Cookie: `bs_session=${dina}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: path.basename(second), size: fs.statSync(second).size }) }).then((r) => r.json())
+      const init = await fetch(`${BASE_URL}/api/p/brass-spyglass/uploads`, { method: 'POST', headers: { Cookie: `bs_session=${dina}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: path.basename(second), size: fs.statSync(second).size }) }).then((r) => r.json())
       const bytes = new Uint8Array(fs.readFileSync(second))
-      await fetch(`${BASE_URL}/api/uploads/${init.id}`, { method: 'PATCH', headers: { Cookie: `bs_session=${dina}`, 'Upload-Offset': '0', 'Content-Type': 'application/octet-stream' }, body: bytes })
-      await fetch(`${BASE_URL}/api/uploads/${init.id}/complete`, { method: 'POST', headers: { Cookie: `bs_session=${dina}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ version_of: up.file.id }) })
+      await fetch(`${BASE_URL}/api/p/brass-spyglass/uploads/${init.id}`, { method: 'PATCH', headers: { Cookie: `bs_session=${dina}`, 'Upload-Offset': '0', 'Content-Type': 'application/octet-stream' }, body: bytes })
+      await fetch(`${BASE_URL}/api/p/brass-spyglass/uploads/${init.id}/complete`, { method: 'POST', headers: { Cookie: `bs_session=${dina}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ version_of: up.file.id }) })
     }
   }
   const shots = await call(cookieOwner, 'GET', '/shots')

@@ -5,9 +5,9 @@ from collections import defaultdict
 from typing import Any
 
 from sqlalchemy import func, inspect, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
-from app import metrics, models, tglinks
+from app import metrics, models, signing, tglinks
 from app.constants import EntityType
 from app.signing import file_url
 
@@ -47,7 +47,7 @@ def previews(db: Session, entity_type: str, ids: list[int]) -> dict[int, dict[st
         if current is None or rank < current[0] or (rank == current[0] == 1):
             best[entity_id] = (rank, file_id, kind)
     return {
-        entity_id: {"file_id": fid, "kind": kind, "url": file_url(fid, "thumb")}
+        entity_id: {"file_id": fid, "kind": kind, "url": file_url(db, fid, "thumb")}
         for entity_id, (_, fid, kind) in best.items()
     }
 
@@ -323,7 +323,14 @@ def entity_labels(db: Session, pairs: set[tuple[str, int | None]]) -> dict[tuple
 
 
 def file_urls(file: models.File) -> dict[str, str]:
-    """Подписанные ссылки на то, что у файла уже готово (превью появляются после обработки)."""
+    """Подписанные ссылки на то, что у файла уже готово (превью появляются после обработки).
+    Ссылка ведёт в проект сессии, из которой файл загружен."""
+    db = object_session(file)
+    assert db is not None, "файл вне сессии"
+
+    def file_url(file_id: int, variant: str) -> str:
+        return signing.file_url(db, file_id, variant)
+
     urls = {"original": file_url(file.id, "original")}
     ready = bool(file.thumb_path)
     if ready:

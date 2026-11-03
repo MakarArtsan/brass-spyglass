@@ -12,7 +12,6 @@ from app.api import serialize
 from app.api.entities import DbDep, UserDep
 from app.auth import session
 from app.services import finals, projects, versions
-from app.services.core import NotFoundError
 
 router = APIRouter(dependencies=[Depends(session.same_origin)])
 
@@ -214,7 +213,5 @@ def _item(
 
 @router.get("/animatic")
 def animatic(db: DbDep, _: UserDep) -> dict[str, Any]:
-    project = projects.get_project(db)
-    if project is None:
-        raise NotFoundError("Проект не создан")
+    project = projects.current(db)
     return build(db, project.id)

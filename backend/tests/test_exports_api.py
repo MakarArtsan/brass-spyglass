@@ -120,6 +120,9 @@ def test_an_export_is_built_in_the_background_and_downloads_as_a_zip(api, clips)
     assert item["result"]["clips"] == 12 and item["result"]["placeholders"] == 10
     assert item["created_by"]["name"] == "Артём" and item["media_root"] == "D:/BrassSpyglass"
 
+    # Адрес должен быть полным: тестовый клиент сам дописывает проект к `/api/…`, и без этой проверки
+    # потерянный префикс остался бы незамеченным (так ссылка «Скачать zip» и вела на 404).
+    assert item["download_url"] == f"/api/p/brass-spyglass/exports/{item['id']}/download"
     download = api.get(item["download_url"])
     assert download.status_code == 200 and download.headers["content-type"] == "application/zip"
     names = zipfile.ZipFile(io.BytesIO(download.content)).namelist()

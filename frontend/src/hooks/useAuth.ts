@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError, type Me, type Project, type User } from '@/lib/api'
 
 export const meKey = ['me'] as const
+export const sessionKey = ['session'] as const
 
 export function useMe() {
   return useQuery({

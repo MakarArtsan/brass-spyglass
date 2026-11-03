@@ -16,7 +16,7 @@ test.describe('шот-лист', () => {
     await page.goto('/shots')
     const ms = await page.evaluate(async () => {
       const t = performance.now()
-      await fetch('/api/shots', { credentials: 'same-origin' }).then((r) => r.json())
+      await fetch('/api/p/brass-spyglass/shots', { credentials: 'same-origin' }).then((r) => r.json())
       return performance.now() - t
     })
     expect(ms).toBeLessThan(1000)
@@ -214,7 +214,7 @@ test.describe('роль «Команда»', () => {
     await shotRow(page, '06.01').getByRole('button', { name: /Статус: Не начато/ }).click()
     await page.getByRole('menuitem', { name: 'Готово' }).click()
     await expect(shotRow(page, '06.01').getByRole('button', { name: /Статус: Готово/ })).toBeVisible()
-    const denied = await page.context().request.fetch(`/api/shots/${shot.id}`, { method: 'PATCH', data: { description: 'взлом' } })
+    const denied = await page.context().request.fetch(`/api/p/brass-spyglass/shots/${shot.id}`, { method: 'PATCH', data: { description: 'взлом' } })
     expect(denied.status()).toBe(403)
     await freshShot(page, '06.01')
   })

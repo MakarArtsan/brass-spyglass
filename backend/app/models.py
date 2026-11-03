@@ -523,6 +523,7 @@ class Notification(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("project.id"), index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("user.id"))  # кому
     actor_id: Mapped[int | None] = mapped_column(ForeignKey("user.id"), default=None)  # кто
     kind: Mapped[str] = mapped_column(String(16))

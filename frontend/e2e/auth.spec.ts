@@ -30,22 +30,32 @@ test.describe('вход', () => {
       claimed = true
       return r.fulfill({ json: OWNER })
     })
-    await page.route('**/api/project', (r) => r.fulfill({ status: 404, json: { detail: 'нет' } }))
-    // /api/me отвечает 401 до того, как сайт забрал сессию, и данными — после.
-    await page.route('**/api/me', (r) =>
+    await page.route('**/api/p/brass-spyglass/project', (r) => r.fulfill({ status: 404, json: { detail: 'нет' } }))
+    // Вне проекта сайт спрашивает, кто вошёл и какие проекты открыты: до claim — 401, после — данные.
+    await page.route('**/api/session', (r) =>
       claimed
         ? r.fulfill({
             json: {
               user: OWNER,
-              abilities: { upload: true, export: true, journal: true, manage_users: true, restore: true },
+              is_superadmin: false,
+              projects: [{ slug: 'brass-spyglass', title: 'Битва', title_en: 'The Brass Spyglass', role: 'owner', archived: false }],
             },
           })
         : r.fulfill({ status: 401, json: { detail: 'Требуется вход' } }),
     )
+    // Внутри проекта: /api/p/brass-spyglass/me отвечает данными, когда сессия уже есть.
+    await page.route('**/api/p/brass-spyglass/me', (r) =>
+      r.fulfill({
+        json: {
+          user: OWNER,
+          abilities: { upload: true, export: true, journal: true, manage_users: true, restore: true },
+        },
+      }),
+    )
 
     await page.goto('/login')
     await page.getByRole('button', { name: /Войти через Telegram/ }).click()
-    await expect(page).toHaveURL(/\/$/)
+    await expect(page).toHaveURL(/\/p\/brass-spyglass\/$/)
     await expect(page.getByRole('heading', { name: /Добро пожаловать на борт, Артём/ })).toBeVisible()
   })
 

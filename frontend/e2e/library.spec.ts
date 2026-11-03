@@ -48,7 +48,7 @@ test.describe('медиатека', () => {
     await page.goto('/media')
     await page.getByRole('button', { name: 'Добавить ссылку' }).click()
 
-    await page.getByLabel('Адрес').fill('http://127.0.0.1:8765/api/me')
+    await page.getByLabel('Адрес').fill('http://127.0.0.1:8765/api/p/brass-spyglass/me')
     await page.getByRole('button', { name: 'Добавить', exact: true }).click()
     await expect(page.getByRole('alert')).toContainText('внутреннюю сеть')
 

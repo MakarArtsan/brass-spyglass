@@ -11,6 +11,7 @@ import { usePerms } from '@/hooks/usePerms'
 import { useCreate, useMeta, useShots, useSounds, useUpdate } from '@/lib/queries'
 import type { SoundCue, StatusKey } from '@/lib/types'
 import { ru } from '@/ru'
+import { apiHref } from '@/lib/project'
 
 const nextCode = (cues: SoundCue[] | undefined) => {
   const n = Math.max(0, ...(cues ?? []).map((c) => Number(c.code.replace(/\D/g, '')) || 0)) + 1
@@ -90,7 +91,7 @@ export default function Sound() {
           <div className="flex flex-wrap gap-2">
             {canExport && (
               <Button asChild variant="outline">
-                <a href="/api/subtitles.srt" download>
+                <a href={apiHref('/subtitles.srt')} download>
                   <Download size={18} aria-hidden />
                   {ru.exportPage.subtitlesButton}
                 </a>

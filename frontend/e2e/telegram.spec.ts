@@ -1,7 +1,7 @@
 import type { Page, Route } from '@playwright/test'
 import { expect, freshShot, test } from './fixtures'
 
-// Настоящего Telegram в e2e нет: сетевые ответы /api/tg/* подменяются. Серверную часть (индекс, импорт,
+// Настоящего Telegram в e2e нет: сетевые ответы /api/p/brass-spyglass/tg/* подменяются. Серверную часть (индекс, импорт,
 // дубли, права) проверяют pytest-тесты на подставном шлюзе; здесь — поведение окна и экрана.
 
 const PNG = Buffer.from(
@@ -42,7 +42,7 @@ const item = (id: number, over: Partial<Item> = {}): Item => ({
   posted_at: `2026-10-30T${String(10 + (id % 12)).padStart(2, '0')}:00:00Z`,
   size_bytes: 1000,
   duration_sec: null,
-  thumb_url: `/api/tg/media/${id}/thumb?t=x`,
+  thumb_url: `/api/p/brass-spyglass/tg/media/${id}/thumb?t=x`,
   imported_file_id: null,
   open_url: `https://t.me/c/1234567890/5/${1000 + id}`,
   ...over,
@@ -58,7 +58,7 @@ const ITEMS: Item[] = Array.from({ length: 30 }, (_, i) => 30 - i).map((id) => {
 })
 
 const TOPICS = [
-  { topic_id: 5, title: 'Персонажи', icon_emoji: null, media_count: 30, last_synced_at: '2026-10-30T12:00:00Z', history_complete: true, latest_thumb_url: '/api/tg/media/30/thumb?t=x' },
+  { topic_id: 5, title: 'Персонажи', icon_emoji: null, media_count: 30, last_synced_at: '2026-10-30T12:00:00Z', history_complete: true, latest_thumb_url: '/api/p/brass-spyglass/tg/media/30/thumb?t=x' },
   { topic_id: 9, title: 'Локации', icon_emoji: null, media_count: 4, last_synced_at: '2026-10-30T12:00:00Z', history_complete: false, latest_thumb_url: null },
 ]
 
@@ -73,9 +73,9 @@ async function mockTelegram(page: Page): Promise<Recorder> {
   const json = (route: Route, body: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) })
   let jobPolls = 0
 
-  await page.route((url) => url.pathname === '/api/tg/topics', (route) => json(route, TOPICS))
+  await page.route((url) => url.pathname === '/api/p/brass-spyglass/tg/topics', (route) => json(route, TOPICS))
   await page.route((url) => url.pathname.endsWith('/thumb'), (route) => route.fulfill({ status: 200, contentType: 'image/png', body: PNG }))
-  await page.route((url) => url.pathname === '/api/tg/media', (route) => {
+  await page.route((url) => url.pathname === '/api/p/brass-spyglass/tg/media', (route) => {
     const q = new URL(route.request().url()).searchParams
     rec.mediaQueries.push(q)
     const kinds = q.get('kinds')?.split(',').filter(Boolean) ?? []
@@ -89,20 +89,20 @@ async function mockTelegram(page: Page): Promise<Recorder> {
     const page20 = rows.slice(0, 20)
     return json(route, { items: page20, next_before_id: rows.length > 20 ? page20[page20.length - 1].id : null })
   })
-  await page.route((url) => /\/api\/tg\/media\/\d+\/view$/.test(url.pathname), (route) => {
+  await page.route((url) => /\/api\/p\/brass-spyglass\/tg\/media\/\d+\/view$/.test(url.pathname), (route) => {
     const id = Number(route.request().url().match(/media\/(\d+)\/view/)![1])
     if (route.request().method() === 'POST') {
       rec.views.push(id)
-      return json(route, { ready: true, url: `/api/tg/media/${id}/view?t=x`, job_id: null })
+      return json(route, { ready: true, url: `/api/p/brass-spyglass/tg/media/${id}/view?t=x`, job_id: null })
     }
     return route.fulfill({ status: 200, contentType: 'image/png', body: PNG })
   })
-  await page.route((url) => url.pathname === '/api/tg/import', async (route) => {
+  await page.route((url) => url.pathname === '/api/p/brass-spyglass/tg/import', async (route) => {
     const body = route.request().postDataJSON() as Record<string, unknown>
     rec.imports.push(body)
     return json(route, { job_id: 7, count: (body.media_ids as number[]).length }, 202)
   })
-  await page.route((url) => url.pathname === '/api/tg/jobs', (route) => {
+  await page.route((url) => url.pathname === '/api/p/brass-spyglass/tg/jobs', (route) => {
     if (rec.imports.length === 0) return json(route, [])
     jobPolls += 1
     const total = (rec.imports[0].media_ids as number[]).length
@@ -237,7 +237,7 @@ test.describe('экран «Telegram»', () => {
     await asRole('owner')
     await mockTelegram(page)
     let synced = 0
-    await page.route((url) => url.pathname === '/api/tg/status', (route) =>
+    await page.route((url) => url.pathname === '/api/p/brass-spyglass/tg/status', (route) =>
       route.fulfill({
         contentType: 'application/json',
         body: JSON.stringify({
@@ -247,7 +247,7 @@ test.describe('экран «Telegram»', () => {
         }),
       }),
     )
-    await page.route((url) => url.pathname === '/api/tg/sync', (route) => {
+    await page.route((url) => url.pathname === '/api/p/brass-spyglass/tg/sync', (route) => {
       synced += 1
       return route.fulfill({ status: 202, contentType: 'application/json', body: '{"started":true}' })
     })
@@ -267,13 +267,13 @@ test.describe('экран «Telegram»', () => {
   test('без настройки объясняет, что делать', async ({ page, asRole }) => {
     await asRole('owner')
     await mockTelegram(page)
-    await page.route((url) => url.pathname === '/api/tg/status', (route) =>
+    await page.route((url) => url.pathname === '/api/p/brass-spyglass/tg/status', (route) =>
       route.fulfill({
         contentType: 'application/json',
         body: JSON.stringify({ configured: false, connected: false, chat_id: null, syncing: false, phase: 'idle', topic: null, thumbs_left: 0, last_error: null, last_run_at: null, overview: null }),
       }),
     )
-    await page.route((url) => url.pathname === '/api/tg/topics', (route) => route.fulfill({ contentType: 'application/json', body: '[]' }))
+    await page.route((url) => url.pathname === '/api/p/brass-spyglass/tg/topics', (route) => route.fulfill({ contentType: 'application/json', body: '[]' }))
     await page.goto('/telegram')
     await expect(page.getByText('Не подключён')).toBeVisible()
     await expect(page.getByText(/TG_SESSION и TG_CHAT_ID/)).toBeVisible()
@@ -283,13 +283,13 @@ test.describe('экран «Telegram»', () => {
     await asRole('owner')
     await mockTelegram(page)
     const reason = 'Одну и ту же сессию использовали с двух мест одновременно, и Telegram её аннулировал. Выпустите новую (make_session.py).'
-    await page.route((url) => url.pathname === '/api/tg/status', (route) =>
+    await page.route((url) => url.pathname === '/api/p/brass-spyglass/tg/status', (route) =>
       route.fulfill({
         contentType: 'application/json',
         body: JSON.stringify({ configured: true, connected: false, userbot_error: reason, chat_id: -1001234567890, syncing: false, phase: 'idle', topic: null, thumbs_left: 0, last_error: null, last_run_at: null, overview: null }),
       }),
     )
-    await page.route((url) => url.pathname === '/api/tg/topics', (route) => route.fulfill({ contentType: 'application/json', body: '[]' }))
+    await page.route((url) => url.pathname === '/api/p/brass-spyglass/tg/topics', (route) => route.fulfill({ contentType: 'application/json', body: '[]' }))
     await page.goto('/telegram')
     await expect(page.getByText('Не подключён')).toBeVisible()
     await expect(page.getByRole('alert').filter({ hasText: 'Причина:' })).toContainText('с двух мест одновременно')
