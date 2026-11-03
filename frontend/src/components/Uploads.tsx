@@ -33,7 +33,7 @@ const DuplicateDialog = lazy(() => import('@/components/DuplicateDialog'))
 
 const MAX_BYTES = 4 * 1024 ** 3
 const PARALLEL = 2
-const ALLOWED = ['mp4', 'mov', 'webm', 'm4v', 'png', 'jpg', 'jpeg', 'webp', 'heic', 'heif', 'gif', 'wav', 'mp3', 'aiff', 'aif', 'flac', 'm4a', 'ogg', 'oga', 'opus', 'pdf', 'docx', 'txt', 'md', 'xlsx']
+const ALLOWED = ['mp4', 'mov', 'webm', 'm4v', 'png', 'jpg', 'jpeg', 'jfif', 'jpe', 'webp', 'heic', 'heif', 'avif', 'gif', 'bmp', 'tif', 'tiff', 'wav', 'mp3', 'aiff', 'aif', 'flac', 'm4a', 'ogg', 'oga', 'opus', 'pdf', 'docx', 'txt', 'md', 'xlsx']
 // eslint-disable-next-line react-refresh/only-export-components
 export const ACCEPT = ALLOWED.map((e) => `.${e}`).join(',')
 
