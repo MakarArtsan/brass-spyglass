@@ -25,6 +25,11 @@ THUMB_TRIES = (1, -1, 0)  # индексы миниатюры от меньше�
 RECENT_MESSAGES = 500  # чтобы не спрашивать у Telegram то же сообщение второй раз ради миниатюры
 
 
+def is_stale_reference(exc: BaseException) -> bool:
+    """Telegram отказал: ссылка на файл в сообщении устарела (по имени, как `flood_seconds`)."""
+    return exc.__class__.__name__ in ("FileReferenceExpiredError", "FilerefUpgradeNeededError")
+
+
 class TelethonGateway:
     def __init__(self, client: Any, chat_id: int, limiter: RateLimiter | None = None) -> None:
         self.client = client
@@ -55,7 +60,11 @@ class TelethonGateway:
         while len(self._recent) > RECENT_MESSAGES:
             self._recent.popitem(last=False)
 
-    async def _message(self, message_id: int) -> Any:
+    async def _message(self, message_id: int, *, fresh: bool = False) -> Any:
+        """Сообщение с файлом. Из памяти берётся, пока не просили свежее: ссылка на файл внутри
+        сообщения живёт несколько часов, а запомнено оно могло быть при индексации давно."""
+        if fresh:
+            self._recent.pop(message_id, None)
         known = self._recent.get(message_id)
         if known is not None:
             return known
@@ -64,6 +73,22 @@ class TelethonGateway:
         if msg is not None:
             self._remember(msg)
         return msg
+
+    async def _with_message[T](self, message_id: int, op: Callable[[Any], Awaitable[T]]) -> T:
+        """Выполняет `op(сообщение)`. Если Telegram ответил, что ссылка на файл устарела
+        (`FileReferenceExpiredError`, это обычно для фото, Telethon сам обновляет её только для
+        документов), заново читает сообщение и повторяет один раз."""
+        msg = await self._message(message_id)
+        try:
+            return await op(msg)
+        except Exception as exc:
+            if not is_stale_reference(exc):
+                raise
+            log.info("ссылка на файл сообщения %s устарела, читаем сообщение заново", message_id)
+            fresh = await self._message(message_id, fresh=True)
+            if fresh is None:
+                raise FileNotFoundError("Сообщение удалено в Telegram") from exc
+            return await op(fresh)
 
     def _topic_of(self, msg: Any) -> int:
         """Тема сообщения: в форуме — id темы из reply_to, иначе «Общая»."""
@@ -124,19 +149,22 @@ class TelethonGateway:
             yield HistoryItem(int(msg.id), parse_message(msg, topic_id))
 
     async def thumb(self, message_id: int) -> bytes | None:
-        msg = await self._message(message_id)
-        if msg is None:
+        if await self._message(message_id) is None:
             return None
-        for index in THUMB_TRIES:
-            try:
-                data = await self._call(
-                    lambda i=index: self.client.download_media(msg, file=bytes, thumb=i)
-                )
-            except (IndexError, ValueError):
-                continue  # у файла меньше миниатюр, чем мы просили
-            if data:
-                return bytes(data)
-        return None
+
+        async def fetch(msg: Any) -> bytes | None:
+            for index in THUMB_TRIES:
+                try:
+                    data = await self._call(
+                        lambda i=index: self.client.download_media(msg, file=bytes, thumb=i)
+                    )
+                except (IndexError, ValueError):
+                    continue  # у файла меньше миниатюр, чем мы просили
+                if data:
+                    return bytes(data)
+            return None
+
+        return await self._with_message(message_id, fetch)
 
     async def download(
         self, message_id: int, dest: Path, on_progress: Progress | None = None
@@ -151,9 +179,16 @@ class TelethonGateway:
                 if on_progress is not None:
                     on_progress(int(received), int(total or 0))
 
-            result = await self._call(
-                lambda: self.client.download_media(msg, file=str(dest), progress_callback=progress)
-            )
+            async def fetch(current: Any) -> Any:
+                if not getattr(current, "media", None):
+                    raise FileNotFoundError("В сообщении больше нет файла")
+                return await self._call(
+                    lambda: self.client.download_media(
+                        current, file=str(dest), progress_callback=progress
+                    )
+                )
+
+            result = await self._with_message(message_id, fetch)
             if not result:
                 raise FileNotFoundError("Telegram не отдал файл")
             if Path(result) != dest:

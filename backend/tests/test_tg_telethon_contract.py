@@ -6,7 +6,9 @@
 видны до выката.
 """
 
+import asyncio
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 from telethon import types
@@ -188,3 +190,85 @@ def test_telethon_has_every_name_the_gateway_uses():
 @pytest.mark.parametrize("name", ["ForumTopic", "ForumTopicDeleted"])
 def test_telethon_still_calls_forum_topics_by_these_names(name):
     assert hasattr(types, name)
+
+
+# --- устаревшая ссылка на файл -------------------------------------------------------------------
+
+
+class RefreshingClient:
+    """Первое сообщение несёт устаревшую ссылку, второе (после `get_messages`) — свежую."""
+
+    def __init__(self) -> None:
+        self.stale = message(id=77, media=types.MessageMediaPhoto(photo=photo()))
+        self.fresh = message(id=77, media=types.MessageMediaPhoto(photo=photo()))
+        self.fetched = 0
+        self.used: list[object] = []
+
+    async def get_input_entity(self, chat):
+        return types.InputPeerChannel(channel_id=1234567890, access_hash=1)
+
+    async def get_messages(self, chat, ids):
+        self.fetched += 1
+        return self.fresh
+
+    async def download_media(self, msg, file, thumb=None, progress_callback=None):
+        from telethon import errors
+
+        self.used.append(msg)
+        if msg is self.stale:
+            raise errors.FileReferenceExpiredError(request=None)
+        if file is bytes:
+            return b"jpeg-bytes"
+        path = str(file)
+        await asyncio.to_thread(Path(path).write_bytes, b"photo")
+        return path
+
+
+async def test_a_photo_with_an_expired_reference_is_downloaded_after_refetching(tmp_path):
+    client = RefreshingClient()
+    gateway = TelethonGateway(client, CHAT, RateLimiter(interval=0))
+    gateway._remember(client.stale)  # так оно попало в память при индексации, давно
+    dest = tmp_path / "x.part"
+    await gateway.download(77, dest)
+    assert dest.read_bytes() == b"photo"
+    assert client.used == [client.stale, client.fresh]  # сначала отказ, потом свежее сообщение
+    assert client.fetched == 1
+
+
+async def test_a_thumbnail_with_an_expired_reference_is_refetched_too():
+    client = RefreshingClient()
+    gateway = TelethonGateway(client, CHAT, RateLimiter(interval=0))
+    gateway._remember(client.stale)
+    assert await gateway.thumb(77) == b"jpeg-bytes"
+    assert any(m is client.fresh for m in client.used)  # у Message нет __eq__: сравниваем по `is`
+    assert client.fetched == 1
+
+
+async def test_other_errors_are_not_retried(tmp_path):
+    from telethon import errors
+
+    client = RefreshingClient()
+
+    async def boom(msg, file, thumb=None, progress_callback=None):
+        client.used.append(msg)
+        raise errors.ChatForbiddenError(request=None)
+
+    client.download_media = boom
+    gateway = TelethonGateway(client, CHAT, RateLimiter(interval=0))
+    gateway._remember(client.stale)
+    with pytest.raises(errors.ChatForbiddenError):
+        await gateway.download(77, tmp_path / "y.part")
+    assert client.used == [client.stale] and client.fetched == 0
+
+
+async def test_a_message_deleted_after_the_reference_expired_is_reported(tmp_path):
+    client = RefreshingClient()
+
+    async def gone(chat, ids):
+        return None
+
+    client.get_messages = gone
+    gateway = TelethonGateway(client, CHAT, RateLimiter(interval=0))
+    gateway._remember(client.stale)
+    with pytest.raises(FileNotFoundError):
+        await gateway.download(77, tmp_path / "z.part")
