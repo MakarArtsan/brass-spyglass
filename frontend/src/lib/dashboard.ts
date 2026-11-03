@@ -46,6 +46,8 @@ export interface DashboardData {
     total: number
     by_kind: Record<'video' | 'image' | 'audio' | 'document' | 'link', number>
     from_telegram: number
+    compressed_files: number
+    saved_bytes: number
     storage: { used_bytes: number; limit_bytes: number; used_pct: number; warn: boolean; full: boolean }
   }
   activity: {

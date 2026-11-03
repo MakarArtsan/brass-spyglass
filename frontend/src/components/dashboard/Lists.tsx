@@ -4,7 +4,7 @@ import { Avatar } from '@/components/Avatar'
 import { Tile } from '@/components/dashboard/primitives'
 import type { DashboardData, DashFeedItem, DashPerson } from '@/lib/dashboard'
 import { describe } from '@/lib/activity'
-import { formatDate, formatDateTime, formatGiB } from '@/lib/format'
+import { formatDate, formatDateTime, formatGiB, formatSize } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { ru } from '@/ru'
 
@@ -52,6 +52,22 @@ export function MediaTile({ data }: { data: DashboardData['media'] }) {
           </p>
         )}
       </div>
+    </Tile>
+  )
+}
+
+/** Плитка «Сэкономлено места сжатием»: сколько весили бы картинки без сжатия, минус сколько весят. */
+export function SavedTile({ data }: { data: DashboardData['media'] }) {
+  return (
+    <Tile title={ru.dash.saved} to="/media">
+      {data.compressed_files > 0 ? (
+        <>
+          <div className="mono text-3xl font-semibold" data-testid="saved-bytes">{formatSize(data.saved_bytes)}</div>
+          <p className="mt-1 text-xs text-fog">{ru.dash.savedFiles(data.compressed_files)}</p>
+        </>
+      ) : (
+        <p className="text-sm text-fog">{ru.dash.savedEmpty}</p>
+      )}
     </Tile>
   )
 }

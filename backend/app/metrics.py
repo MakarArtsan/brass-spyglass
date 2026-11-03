@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from app import models, storage
 from app.config import Settings
-from app.constants import FileKind, FileSource, Status
+from app.constants import CompressState, FileKind, FileSource, Status
 
 CUT = Status.CUT.value
 DONE = Status.DONE.value
@@ -727,6 +727,24 @@ def _scene_rows(db: Session, project_id: int) -> list[models.Scene]:
     )
 
 
+def compression_savings(db: Session, project_id: int) -> dict[str, int]:
+    """Сколько места сэкономило сжатие картинок: по живым текущим файлам, чистая экономия
+    (не меньше нуля). Оригинал мог уже удалиться по сроку — экономия от этого не пропадает."""
+    row = db.execute(
+        select(
+            func.count(),
+            func.coalesce(func.sum(models.File.original_size_bytes - models.File.size_bytes), 0),
+        ).where(
+            models.File.project_id == project_id,
+            models.File.deleted_at.is_(None),
+            models.File.is_current.is_(True),
+            models.File.compress_state == CompressState.DONE.value,
+            models.File.original_size_bytes.is_not(None),
+        )
+    ).one()
+    return {"files": int(row[0]), "saved_bytes": max(0, int(row[1]))}
+
+
 def _media_summary(db: Session, project_id: int) -> dict[str, Any]:
     rows = db.execute(
         select(models.File.kind, models.File.source, func.count())
@@ -743,7 +761,14 @@ def _media_summary(db: Session, project_id: int) -> dict[str, Any]:
         by_kind[kind] += count
         if source == FileSource.TELEGRAM.value:
             from_telegram += count
-    return {"total": sum(by_kind.values()), "by_kind": by_kind, "from_telegram": from_telegram}
+    saved = compression_savings(db, project_id)
+    return {
+        "total": sum(by_kind.values()),
+        "by_kind": by_kind,
+        "from_telegram": from_telegram,
+        "compressed_files": saved["files"],
+        "saved_bytes": saved["saved_bytes"],
+    }
 
 
 def dashboard_data(

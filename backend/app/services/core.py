@@ -177,6 +177,7 @@ ENTITIES: dict[str, EntitySpec] = {
                 "tg_topic_id",
                 "tg_message_id",
                 "tg_author",
+                "no_compress",
             }
         ),
         owner_field="uploaded_by",

@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -52,6 +53,9 @@ interface Item {
 interface Api {
   items: Item[]
   upload: (files: FileList | File[], target: UploadTarget) => void
+  /** «Без сжатия»: действует на всё, что загружается, пока галочка стоит (кнопки, перетаскивание). */
+  noCompress: boolean
+  setNoCompress: (value: boolean) => void
 }
 
 const Ctx = createContext<Api | null>(null)
@@ -77,6 +81,12 @@ export function UploadProvider({ children }: { children: ReactNode }) {
   const qc = useQueryClient()
   const perms = usePerms()
   const [items, setItems] = useState<Item[]>([])
+  const [noCompress, setNoCompressState] = useState(false)
+  const noCompressNow = useRef(false) // чтобы переключение галочки не пересоздавало `upload`
+  const setNoCompress = useCallback((value: boolean) => {
+    noCompressNow.current = value
+    setNoCompressState(value)
+  }, [])
   const controllers = useRef(new Map<string, AbortController>())
   const running = useRef(new Set<string>())
   const lastPaint = useRef(0)
@@ -172,7 +182,8 @@ export function UploadProvider({ children }: { children: ReactNode }) {
         } else if (file.size === 0) {
           toast(`${file.name}: ${ru.files.failed}`)
         } else {
-          accepted.push({ id: crypto.randomUUID(), file, target, loaded: 0, state: 'queued' })
+          const stamped = noCompressNow.current ? { ...target, noCompress: true } : target
+          accepted.push({ id: crypto.randomUUID(), file, target: stamped, loaded: 0, state: 'queued' })
         }
       }
       if (accepted.length) setItems((list) => [...list, ...accepted])
@@ -187,7 +198,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
   }
 
   const duplicate = items.find((i) => i.state === 'duplicate')
-  const value = useMemo(() => ({ items, upload }), [items, upload])
+  const value = useMemo(() => ({ items, upload, noCompress, setNoCompress }), [items, upload, noCompress, setNoCompress])
 
   return (
     <Ctx.Provider value={value}>
@@ -340,6 +351,27 @@ function Tray({ items, onCancel }: { items: Item[]; onCancel: (i: Item) => void 
   )
 }
 
+/** Галочка «Без сжатия» рядом с кнопками загрузки: картинка останется оригиналом бит в бит. */
+export function NoCompressToggle({ className }: { className?: string }) {
+  const { noCompress, setNoCompress } = useUploads()
+  const hintId = useId()
+  return (
+    <label className={cn('flex min-h-touch cursor-pointer items-center gap-2 text-sm text-fog', className)} title={ru.files.noCompressHint}>
+      <input
+        type="checkbox"
+        checked={noCompress}
+        onChange={(e) => setNoCompress(e.target.checked)}
+        className="h-5 w-5 shrink-0 accent-brass"
+        aria-describedby={hintId}
+      />
+      <span className={noCompress ? 'text-paper' : undefined}>{ru.files.noCompress}</span>
+      <span id={hintId} className="sr-only">
+        {ru.files.noCompressHint}
+      </span>
+    </label>
+  )
+}
+
 /** Кнопки «Добавить файлы» и (на телефоне) «Снять». Выбор из Telegram — этап 2. */
 export function UploadButtons({ target, className }: { target: UploadTarget; className?: string }) {
   const { upload } = useUploads()
@@ -363,6 +395,7 @@ export function UploadButtons({ target, className }: { target: UploadTarget; cla
         <Camera size={18} />
         {ru.files.camera}
       </Button>
+      <NoCompressToggle />
     </div>
   )
 }

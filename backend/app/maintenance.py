@@ -14,7 +14,7 @@ from app import backup, models
 from app import db as database
 from app.config import Settings
 from app.constants import JobStatus, JobType
-from app.services import exports, jobs
+from app.services import compression, exports, jobs
 
 log = logging.getLogger(__name__)
 
@@ -47,8 +47,13 @@ class Maintenance:
         self._task: asyncio.Task[None] | None = None
 
     async def start(self) -> None:
-        await asyncio.to_thread(exports.cleanup, self.settings)
+        await asyncio.to_thread(self._cleanup)
         self._task = asyncio.create_task(self._run(), name="maintenance")
+
+    def _cleanup(self) -> None:
+        """Старые пакеты экспорта и оригиналы картинок, у которых вышел срок хранения."""
+        exports.cleanup(self.settings)
+        compression.cleanup_expired(self.settings)
 
     async def stop(self) -> None:
         if self._task:
@@ -65,6 +70,6 @@ class Maintenance:
                     self._wake()
                 tick += 1
                 if tick % CLEANUP_EVERY_TICKS == 0:
-                    await asyncio.to_thread(exports.cleanup, self.settings)
+                    await asyncio.to_thread(self._cleanup)
             except Exception:
                 log.exception("ошибка фонового обслуживания")

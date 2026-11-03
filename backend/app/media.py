@@ -118,7 +118,7 @@ def _save_jpeg(image: Image.Image, dest: Path, max_side: int) -> None:
     copy.save(dest, "JPEG", quality=85, optimize=True)
 
 
-def _to_8bit(image: Image.Image) -> Image.Image:
+def to_8bit(image: Image.Image) -> Image.Image:
     """16-битные TIFF/PNG Pillow переводит в RGB «с обрезкой» (картинка становится белой):
     сначала сжимаем диапазон до 8 бит."""
     if image.mode in ("I;16", "I;16L", "I;16B", "I;16N"):
@@ -134,7 +134,7 @@ def _open_rgb(path: Path) -> Image.Image:
     try:
         with Image.open(path) as raw:
             raw.load()  # многостраничный TIFF и анимация: берётся первый кадр
-            return _to_8bit(ImageOps.exif_transpose(raw)).convert("RGB")
+            return to_8bit(ImageOps.exif_transpose(raw)).convert("RGB")
     except Exception as exc:  # битый файл, неизвестный формат
         raise MediaError(f"Не удалось открыть изображение: {exc}") from exc
 

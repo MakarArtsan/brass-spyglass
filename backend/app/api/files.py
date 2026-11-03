@@ -25,7 +25,7 @@ from app.auth import session
 from app.config import get_settings
 from app.constants import EntityType, FileKind, FileSource, Purpose
 from app.db import ci_contains
-from app.services import core, files, finals, links, projects, versions
+from app.services import compression, core, files, finals, links, projects, versions
 
 router = APIRouter(dependencies=[Depends(session.same_origin)])
 
@@ -133,6 +133,7 @@ class UploadComplete(BaseModel):
     purpose: Literal[tuple(p.value for p in Purpose)] = Purpose.REFERENCE.value  # type: ignore[valid-type]
     force: bool = False  # добавить, даже если такой файл уже есть
     version_of: int | None = None  # загрузить как новую версию этого файла
+    no_compress: bool = False  # «Без сжатия»: оригинал бит в бит (финальные кадры, мастера)
 
 
 def _sha256(path: Path) -> str:
@@ -207,6 +208,7 @@ def complete_upload(
             size_bytes=meta["size"],
             sha256=digest,
             files_dir=settings.files_dir,
+            compress=not body.no_compress,
         )
         uploads.discard(settings, upload_id)
         request.app.state.jobs.wake()
@@ -231,6 +233,7 @@ def complete_upload(
         size_bytes=meta["size"],
         sha256=digest,
         files_dir=settings.files_dir,
+        compress=not body.no_compress,
     )
     uploads.discard(settings, upload_id)
     attachment_id = None
@@ -354,6 +357,7 @@ def library(
         "items": items,
         "total": total,
         "next_before_id": rows[-1].id if more and rows else None,
+        "compression": metrics.compression_savings(db, _project_id(db)),
     }
 
 
@@ -397,6 +401,13 @@ def file_versions(file_id: int, db: DbDep, _: UserDep) -> list[dict[str, Any]]:
     file = core.get(db, EntityType.FILE, file_id)
     group = [v for v in versions.members(db, file) if v.deleted_at is None]  # type: ignore[arg-type]
     return serialize.files_out(db, list(reversed(group)))
+
+
+@router.post("/files/{file_id}/restore-original")
+def restore_original(file_id: int, db: DbDep, actor: ActorDep) -> dict[str, Any]:
+    """«Вернуть оригинал»: пока он лежит (7 дней после сжатия), сжатый файл заменяется им."""
+    file = compression.restore_original(db, actor, file_id, get_settings())
+    return serialize.files_out(db, [file])[0]
 
 
 @router.post("/files/{file_id}/rollback")

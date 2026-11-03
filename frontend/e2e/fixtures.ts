@@ -81,6 +81,14 @@ export function uniqueImage(tag: string): string {
   return file
 }
 
+/** Уникальная картинка, которая заметно сжимается (много плоских областей): свои цвета → своя сумма. */
+export function compressibleImage(tag: string): string {
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'bs-e2e-')), `${tag}.png`)
+  const hue = Math.abs(hash(tag)) % 360
+  execFileSync('ffmpeg', ['-y', '-v', 'error', '-f', 'lavfi', '-i', `testsrc2=size=960x540,hue=h=${hue}`, '-frames:v', '1', file])
+  return file
+}
+
 /** Уникальное короткое видео (своя частота тона → своя контрольная сумма): для версий файла. */
 export function uniqueVideo(tag: string): string {
   const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'bs-e2e-')), `${tag}.mp4`)

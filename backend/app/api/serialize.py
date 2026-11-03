@@ -368,6 +368,22 @@ def _tg_info(f: models.File, titles: dict[tuple[int, int], str]) -> dict[str, An
     }
 
 
+def _compression_out(f: models.File) -> dict[str, Any]:
+    """Итог сжатия для карточки файла: «2,4 МБ → 610 КБ, −75%» и кнопка «Вернуть оригинал»."""
+    from app.config import get_settings
+    from app.services import compression
+
+    settings = get_settings()
+    can_restore = compression.can_restore(f, settings)
+    return {
+        "state": f.compress_state,
+        "no_compress": f.no_compress,
+        "original_size_bytes": f.original_size_bytes,
+        "original_until": compression.original_until(f, settings) if can_restore else None,
+        "can_restore": can_restore,
+    }
+
+
 def files_out(db: Session, files: list[models.File]) -> list[dict[str, Any]]:
     from app.services import jobs
 
@@ -406,6 +422,7 @@ def files_out(db: Session, files: list[models.File]) -> list[dict[str, Any]]:
                 "uploaded_by": uploaders.get(f.uploaded_by) if f.uploaded_by else None,
                 "processing": f.id in active,
                 "error": failed.get(f.id),
+                "compression": _compression_out(f),
                 "urls": file_urls(f),
             }
         )
