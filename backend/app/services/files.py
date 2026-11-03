@@ -16,7 +16,24 @@ from app.services import core, jobs
 # Что принимаем (ТЗ, «Загрузка с устройства и ссылки»).
 KIND_BY_EXT: dict[str, FileKind] = {
     **dict.fromkeys(("mp4", "mov", "webm", "m4v"), FileKind.VIDEO),
-    **dict.fromkeys(("png", "jpg", "jpeg", "webp", "heic", "heif", "gif"), FileKind.IMAGE),
+    **dict.fromkeys(
+        (
+            "png",
+            "jpg",
+            "jpeg",
+            "jfif",
+            "jpe",
+            "webp",
+            "heic",
+            "heif",
+            "avif",
+            "gif",
+            "bmp",
+            "tif",
+            "tiff",
+        ),
+        FileKind.IMAGE,
+    ),  # fmt: skip
     **dict.fromkeys(
         ("wav", "mp3", "aiff", "aif", "flac", "m4a", "ogg", "oga", "opus"), FileKind.AUDIO
     ),
@@ -24,9 +41,20 @@ KIND_BY_EXT: dict[str, FileKind] = {
 }
 
 
+# jfif и jpe — тот же JPEG под другим именем: сохраняем как .jpg (ТЗ), байты не трогаем.
+EXT_ALIASES = {"jfif": "jpg", "jpe": "jpg"}
+ALIAS_MIME = {"jpg": "image/jpeg"}
+
+
 def extension(name: str) -> str:
     match = re.search(r"\.([A-Za-z0-9]{1,8})$", name.strip())
     return match.group(1).lower() if match else ""
+
+
+def canonical_name(name: str) -> str:
+    """Имя с расширением, под которым файл хранится: `photo.JFIF` → `photo.jpg`."""
+    target = EXT_ALIASES.get(extension(name))
+    return re.sub(r"\.[A-Za-z0-9]{1,8}$", f".{target}", name.strip()) if target else name
 
 
 def kind_for(name: str) -> FileKind | None:
@@ -66,6 +94,9 @@ def store_upload(
     kind = kind_for(original_name)
     if kind is None:
         raise core.ValidationError(f"Формат «{extension(original_name) or '?'}» не поддерживается")
+    if extension(original_name) in EXT_ALIASES:
+        original_name = canonical_name(original_name)
+        mime = ALIAS_MIME.get(extension(original_name), mime)
     file = core.create(
         db,
         actor,

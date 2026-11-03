@@ -57,9 +57,17 @@ let media: Record<string, string> | null = null
 export function sampleMedia(): Record<string, string> {
   if (media) return media
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bs-e2e-'))
-  const files = { photo: path.join(dir, 'photo.png'), video: path.join(dir, 'clip.mp4'), audio: path.join(dir, 'tone.wav') }
+  const files = {
+    photo: path.join(dir, 'photo.png'),
+    photoJpg: path.join(dir, 'camera.jpg'),
+    photoJfif: path.join(dir, 'camera.jfif'),
+    video: path.join(dir, 'clip.mp4'),
+    audio: path.join(dir, 'tone.wav'),
+  }
   const ff = (...a: string[]) => execFileSync('ffmpeg', ['-y', '-v', 'error', ...a])
   ff('-f', 'lavfi', '-i', 'testsrc2=size=800x450', '-frames:v', '1', files.photo)
+  ff('-f', 'lavfi', '-i', 'testsrc2=size=800x450', '-frames:v', '1', files.photoJpg)
+  fs.copyFileSync(files.photoJpg, files.photoJfif) // jfif — тот же JPEG под другим именем
   ff('-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=24:duration=2', '-f', 'lavfi', '-i', 'sine=frequency=330:duration=2', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', files.video)
   ff('-f', 'lavfi', '-i', 'sine=frequency=220:duration=3', files.audio)
   media = files

@@ -38,6 +38,20 @@ test.describe('загрузка файлов', () => {
     await clearFiles(page, shot.id)
   })
 
+  test('картинка .jfif принимается и хранится как .jpg', async ({ page, isMobile }) => {
+    const shot = await freshShot(page, '07.01')
+    await clearFiles(page, shot.id)
+    await page.goto(`/shots?shot=${shot.id}`)
+    const card = cardOf(page, isMobile)
+    await card.getByLabel('Выбрать файлы').first().setInputFiles(sampleMedia().photoJfif)
+    await expect(card.getByRole('button', { name: /Открыть: camera\.jpg/ })).toBeVisible()
+    await expect.poll(async () => (await filesOf(page, shot.id))[0]?.file.processing).toBe(false)
+    const [attached] = await filesOf(page, shot.id)
+    expect(attached.file.original_name).toBe('camera.jpg')
+    expect(attached.file.urls.thumb).toBeTruthy()
+    await clearFiles(page, shot.id)
+  })
+
   test('перетаскивание файла с рабочего стола на строку шота', async ({ page, isMobile }) => {
     test.skip(!!isMobile, 'drag-and-drop с рабочего стола — только ПК')
     const shot = await freshShot(page, '07.02')
