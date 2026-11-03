@@ -7,6 +7,38 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 OWNER_TG_ID = 1001
+DEFAULT_SLUG = "brass-spyglass"
+# Адреса вне проектов: всё остальное тесты по умолчанию вызывают в проекте фильма (`/api/p/<slug>/…`),
+# так что прежние `client.get("/api/shots")` продолжают работать; тесты изоляции ходят с явным адресом.
+GLOBAL_API = ("/api/health", "/api/auth/", "/api/projects", "/api/session")
+
+
+def project_url(url: str) -> str:
+    """`/api/…` → `/api/p/<slug>/…` (адрес может прийти и полным: клиент сам добавляет хост)."""
+    head = ""
+    if "://" in url:
+        head, _, rest = url.partition("://")
+        host, slash, tail = rest.partition("/")
+        head, url = f"{head}://{host}", f"{slash}{tail}"
+    path = url.split("?", 1)[0]
+    if not url.startswith("/api/") or url.startswith("/api/p/") or path.startswith(GLOBAL_API):
+        return head + url
+    if path.startswith("/api/users/") and path.endswith("/avatar"):  # аватары — вне проектов
+        return head + url
+    return f"{head}/api/p/{DEFAULT_SLUG}/{url[len('/api/') :]}"
+
+
+@pytest.fixture(autouse=True)
+def default_project_urls(monkeypatch: pytest.MonkeyPatch) -> None:
+    from starlette.testclient import TestClient as _Client
+
+    original = _Client.build_request
+
+    def build_request(self, method, url, *args, **kwargs):  # type: ignore[no-untyped-def]
+        url = project_url(str(url))  # клиент уже сделал из адреса httpx.URL с хостом
+        return original(self, method, url, *args, **kwargs)
+
+    monkeypatch.setattr(_Client, "build_request", build_request)
 
 
 @pytest.fixture(autouse=True)
@@ -35,6 +67,7 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 def db(env: Path) -> Iterator[Session]:
     """Сессия на свежей БД, созданной миграциями (заодно проверяет их)."""
     from app import db as database
+    from app import scope
     from app.migrate import upgrade_to_head
     from app.services import projects
 
@@ -42,8 +75,10 @@ def db(env: Path) -> Iterator[Session]:
     with engine.begin() as conn:
         upgrade_to_head(conn)
     with database.session_factory()() as session:
-        projects.ensure_default_project(session)
+        project = projects.ensure_default_project(session)
         session.commit()
+        # Как запрос внутри проекта фильма: сервисы, которым нужен проект (уведомления), его видят.
+        scope.select_project(session, project.id, project.slug)
         yield session
         session.rollback()
     engine.dispose()

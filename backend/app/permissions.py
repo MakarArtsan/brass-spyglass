@@ -20,6 +20,7 @@ class Actor:
 
     id: int
     role: Role
+    project_id: int | None = None  # проект, в котором человек действует (None — вне проекта)
 
 
 class PermissionDenied(Exception):  # noqa: N818 — читается лучше, чем PermissionDeniedError

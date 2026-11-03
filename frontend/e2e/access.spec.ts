@@ -10,7 +10,7 @@ test.describe('роли в интерфейсе', () => {
     await expect(scope.getByRole('link', { name: 'Экспорт' })).toHaveCount(0)
     await expect(scope.getByRole('link', { name: 'Команда' })).toHaveCount(1)
     await page.goto('/journal')
-    await expect(page).toHaveURL(/\/$/)
+    await expect(page).toHaveURL(/\/p\/brass-spyglass\/?$/)
   })
 
   test('роль «Команда» видит журнал и экспорт', async ({ page, asRole, isMobile }) => {
@@ -31,8 +31,8 @@ test.describe('роли в интерфейсе', () => {
   })
 
   test('API без сессии закрыт, health открыт без секретов', async ({ request }) => {
-    expect((await request.get('/api/me')).status()).toBe(401)
-    expect((await request.get('/api/project')).status()).toBe(401)
+    expect((await request.get('/api/p/brass-spyglass/me')).status()).toBe(401)
+    expect((await request.get('/api/p/brass-spyglass/project')).status()).toBe(401)
     const health = await request.get('/api/health')
     expect(health.ok()).toBe(true)
     expect(JSON.stringify(await health.json())).not.toContain('e2e-secret')

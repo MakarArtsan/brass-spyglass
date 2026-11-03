@@ -1,3 +1,4 @@
+import { apiHref, apiPath } from '@/lib/project'
 import type { Attached, DuplicateInfo, FileItem } from '@/lib/types'
 
 export interface UploadTarget {
@@ -70,7 +71,7 @@ function whenOnline(signal: AbortSignal): Promise<void> {
 async function json<T>(path: string, init: RequestInit): Promise<T> {
   let res: Response
   try {
-    res = await fetch(`/api${path}`, { credentials: 'same-origin', ...init })
+    res = await fetch(`/api${apiPath(path)}`, { credentials: 'same-origin', ...init })
   } catch {
     throw new NetworkError('offline')
   }
@@ -98,7 +99,7 @@ function putChunk(
 ): Promise<number> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
-    xhr.open('PATCH', `/api/uploads/${uploadId}`)
+    xhr.open('PATCH', apiHref(`/uploads/${uploadId}`))
     xhr.setRequestHeader('Upload-Offset', String(offset))
     xhr.setRequestHeader('Content-Type', 'application/octet-stream')
     xhr.upload.onprogress = (e) => hooks.onProgress(offset + e.loaded, total)
@@ -208,7 +209,7 @@ export async function uploadFile(
 }
 
 export async function cancelUpload(uploadId: string): Promise<void> {
-  await fetch(`/api/uploads/${uploadId}`, { method: 'DELETE', credentials: 'same-origin' }).catch(() => undefined)
+  await fetch(apiHref(`/uploads/${uploadId}`), { method: 'DELETE', credentials: 'same-origin' }).catch(() => undefined)
 }
 
 export type { Attached }

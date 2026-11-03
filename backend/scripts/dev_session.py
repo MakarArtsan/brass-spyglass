@@ -18,8 +18,9 @@ from app import db as database  # noqa: E402
 from app import models  # noqa: E402
 from app.auth.session import _SALT  # noqa: E402
 from app.config import get_settings  # noqa: E402
+from app.constants import Role  # noqa: E402
 from app.migrate import upgrade_to_head  # noqa: E402
-from app.services import projects, users  # noqa: E402
+from app.services import members, projects, users  # noqa: E402
 
 
 def main() -> None:
@@ -36,7 +37,7 @@ def main() -> None:
     database.init_engine()
     upgrade_to_head()
     with database.session_factory()() as db:
-        projects.ensure_default_project(db)
+        project = projects.ensure_default_project(db)
         user = users.upsert_from_telegram(
             db,
             tg_id=args.tg_id,
@@ -46,6 +47,7 @@ def main() -> None:
             owner_tg_id=settings.owner_tg_id,
         )
         user.role = args.role
+        members.ensure(db, project, user, role=Role(args.role))  # роль — на паре с проектом
         db.commit()
         uid = db.get(models.User, user.id).id
     print(URLSafeTimedSerializer(settings.session_secret, salt=_SALT).dumps({"uid": uid}))

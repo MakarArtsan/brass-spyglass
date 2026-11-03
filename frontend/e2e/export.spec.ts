@@ -70,8 +70,8 @@ test.describe('экспорт в Resolve и Premiere', () => {
   test('на экране «Звук» есть выгрузка субтитров', async ({ page }) => {
     await page.goto('/sound')
     const link = page.getByRole('link', { name: 'Экспорт субтитров (.srt)' })
-    await expect(link).toHaveAttribute('href', '/api/subtitles.srt')
-    const response = await page.request.get('/api/subtitles.srt')
+    await expect(link).toHaveAttribute('href', '/api/p/brass-spyglass/subtitles.srt')
+    const response = await page.request.get('/api/p/brass-spyglass/subtitles.srt')
     expect(response.status()).toBe(200)
     expect(await response.text()).toContain('We are poor. But they? Look how they shine!')
   })
@@ -79,7 +79,7 @@ test.describe('экспорт в Resolve и Premiere', () => {
   test('гость не видит экспорт: пункта нет, прямая ссылка уводит на дашборд', async ({ page, asRole, isMobile }) => {
     await asRole('guest')
     await page.goto('/export')
-    await expect(page).toHaveURL(/\/$/)
+    await expect(page).toHaveURL(/\/p\/brass-spyglass\/?$/)
     if (!isMobile) await expect(page.getByRole('link', { name: 'Экспорт', exact: true })).toHaveCount(0)
     await page.goto('/sound')
     await expect(page.getByRole('link', { name: 'Экспорт субтитров (.srt)' })).toHaveCount(0)

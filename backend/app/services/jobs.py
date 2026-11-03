@@ -27,6 +27,8 @@ def _announce(db: Session, job: models.Job) -> None:
             "progress": round(job.progress or 0, 2),
             "file_id": (job.payload or {}).get("file_id"),
             "created_by": job.created_by,
+            # Событие уходит только подписчикам проекта задачи; задача без проекта (бэкап) — никому.
+            "project_id": (job.payload or {}).get("project_id"),
         },
     )
 
@@ -34,6 +36,13 @@ def _announce(db: Session, job: models.Job) -> None:
 def enqueue(
     db: Session, job_type: JobType, payload: dict[str, Any], created_by: int | None = None
 ) -> models.Job:
+    project_id = db.info.get("project_id") or payload.get("project_id")
+    if project_id is None and payload.get("file_id") is not None:
+        project_id = db.scalar(
+            select(models.File.project_id).where(models.File.id == payload["file_id"])
+        )
+    if project_id is not None:
+        payload = {**payload, "project_id": project_id}
     job = models.Job(type=job_type.value, payload=payload, created_by=created_by)
     db.add(job)
     db.flush()

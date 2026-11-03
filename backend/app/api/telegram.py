@@ -10,8 +10,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
-from app import models, permissions, signing, tglinks
+from app import models, permissions, scope, signing, tglinks
 from app.api.entities import ActorDep, DbDep
 from app.auth import session
 from app.config import get_settings
@@ -36,24 +37,37 @@ def member(actor: ActorDep) -> Actor:
 router = APIRouter(prefix="/tg", dependencies=[Depends(session.same_origin), Depends(member)])
 
 
-def _chat_id() -> int:
-    chat = get_settings().tg_chat_id
+def _chat_id(db: Session) -> int:
+    """Чат проекта: окно «Добавить из Telegram» показывает только его (один чат — один проект)."""
+    chat = projects.current(db).tg_chat_id
     if chat is None:
-        raise HTTPException(
-            status.HTTP_503_SERVICE_UNAVAILABLE, "Чат Telegram не настроен (TG_CHAT_ID)"
-        )
+        raise HTTPException(status.HTTP_409_CONFLICT, "К проекту не привязан чат Telegram")
     return chat
 
 
-def thumb_url(media_id: int) -> str:
-    return f"/api/tg/media/{media_id}/thumb?t={signing.sign(media_id, 'tg-thumb')}"
+def _signed_url(db: Session, media_id: int, part: str) -> str:
+    pid, slug = scope.current_project_id(db), db.info[scope.PROJECT_SLUG]
+    token = signing.sign(media_id, f"tg-{part}", pid)
+    return f"/api/p/{slug}/tg/media/{media_id}/{part}?t={token}"
 
 
-def view_url(media_id: int) -> str:
-    return f"/api/tg/media/{media_id}/view?t={signing.sign(media_id, 'tg-view')}"
+def thumb_url(db: Session, media_id: int) -> str:
+    return _signed_url(db, media_id, "thumb")
 
 
-def _item(row: models.TgMedia) -> dict[str, Any]:
+def view_url(db: Session, media_id: int) -> str:
+    return _signed_url(db, media_id, "view")
+
+
+def _media_row(db: Session, media_id: int) -> models.TgMedia:
+    """Медиа из индекса — только из чата проекта: чужой чат и несуществующее медиа неотличимы."""
+    row = tg_service.get_media(db, media_id)
+    if row.chat_id != _chat_id(db):
+        raise NotFoundError("Такого медиа нет в индексе Telegram")
+    return row
+
+
+def _item(db: Session, row: models.TgMedia) -> dict[str, Any]:
     return {
         "id": row.id,
         "message_id": row.message_id,
@@ -68,7 +82,7 @@ def _item(row: models.TgMedia) -> dict[str, Any]:
         "posted_at": row.posted_at,
         "size_bytes": row.size_bytes,
         "duration_sec": row.duration_sec,
-        "thumb_url": thumb_url(row.id) if row.thumb_path else None,
+        "thumb_url": thumb_url(db, row.id) if row.thumb_path else None,
         "imported_file_id": row.imported_file_id,
         "open_url": tglinks.message_url(row.chat_id, row.topic_id, row.message_id),
     }
@@ -77,14 +91,16 @@ def _item(row: models.TgMedia) -> dict[str, Any]:
 @router.get("/status")
 def tg_status(db: DbDep, request: Request) -> dict[str, Any]:
     settings = get_settings()
-    indexer = runtime.indexer
+    chat = projects.current(db).tg_chat_id
+    mine = runtime.gateway is not None and getattr(runtime.gateway, "chat_id", None) == chat
+    indexer = runtime.indexer if mine else None
     state = indexer.state if indexer else None
-    overview = tg_service.overview(db, settings.tg_chat_id) if settings.tg_chat_id else None
+    overview = tg_service.overview(db, chat) if chat is not None else None
     return {
-        "configured": bool(settings.tg_session and settings.tg_chat_id is not None),
-        "connected": runtime.gateway is not None,
+        "configured": bool(settings.tg_session and chat is not None),
+        "connected": mine,
         "userbot_error": getattr(request.app.state.tg, "userbot_error", None),
-        "chat_id": settings.tg_chat_id,
+        "chat_id": chat,
         "syncing": bool(state and state.running),
         "phase": state.phase if state else "idle",
         "topic": state.topic if state else None,
@@ -96,10 +112,11 @@ def tg_status(db: DbDep, request: Request) -> dict[str, Any]:
 
 
 @router.post("/sync", status_code=status.HTTP_202_ACCEPTED)
-def tg_sync(actor: ActorDep) -> dict[str, bool]:
+def tg_sync(db: DbDep, actor: ActorDep) -> dict[str, bool]:
     """Прочитать чат заново, не дожидаясь плановой синхронизации. Только владелец."""
     permissions.require(permissions.can_manage_users(actor), "Синхронизацию запускает владелец")
-    if runtime.indexer is None:
+    chat = projects.current(db).tg_chat_id
+    if runtime.indexer is None or getattr(runtime.gateway, "chat_id", None) != chat:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Юзербот Telegram не подключён")
     runtime.indexer.request_sync()
     return {"started": True}
@@ -107,10 +124,10 @@ def tg_sync(actor: ActorDep) -> dict[str, bool]:
 
 @router.get("/topics")
 def tg_topics(db: DbDep) -> list[dict[str, Any]]:
-    topics = tg_service.topics_with_latest_thumb(db, _chat_id())
+    topics = tg_service.topics_with_latest_thumb(db, _chat_id(db))
     for topic in topics:
         media_id = topic.pop("latest_thumb_media_id")
-        topic["latest_thumb_url"] = thumb_url(media_id) if media_id else None
+        topic["latest_thumb_url"] = thumb_url(db, media_id) if media_id else None
     return topics
 
 
@@ -132,11 +149,13 @@ def tg_media(
     before = None
     if before_id is not None:
         anchor = db.get(models.TgMedia, before_id)
+        if anchor is not None and anchor.chat_id != _chat_id(db):
+            anchor = None  # курсор из чужого чата не годится
         if anchor is not None:
             before = (anchor.posted_at, anchor.id)
     rows = tg_service.media_page(
         db,
-        _chat_id(),
+        _chat_id(db),
         topic_id=topic_id,
         kinds=wanted or None,
         query=q,
@@ -147,7 +166,7 @@ def tg_media(
     more = len(rows) > limit
     rows = rows[:limit]
     return {
-        "items": [_item(r) for r in rows],
+        "items": [_item(db, r) for r in rows],
         "next_before_id": rows[-1].id if more and rows else None,
     }
 
@@ -162,9 +181,9 @@ def _thumb_path(row: models.TgMedia) -> Path | None:
 
 @router.get("/media/{media_id}/thumb")
 def tg_thumb(media_id: int, db: DbDep, t: str | None = None) -> FileResponse:
-    if not signing.verify(t, media_id, "tg-thumb"):
+    if not signing.verify(t, media_id, "tg-thumb", scope.current_project_id(db)):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Ссылка устарела")
-    path = _thumb_path(tg_service.get_media(db, media_id))
+    path = _thumb_path(_media_row(db, media_id))
     if path is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Миниатюры нет")
     return FileResponse(
@@ -182,13 +201,13 @@ def _view_info(row: models.TgMedia) -> MediaInfo:
 @router.post("/media/{media_id}/view")
 def tg_view(media_id: int, request: Request, db: DbDep, actor: ActorDep) -> dict[str, Any]:
     """Готов ли файл к просмотру в окне. Если нет — ставит задачу скачать его в кэш просмотра."""
-    row = tg_service.get_media(db, media_id)
+    row = _media_row(db, media_id)
     if row.kind == "link":
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT, "Ссылку открывают в новой вкладке"
         )
     if previews.cached(get_settings(), row.message_id, row.topic_id) is not None:
-        return {"ready": True, "url": view_url(row.id), "job_id": None}
+        return {"ready": True, "url": view_url(db, row.id), "job_id": None}
     pending = db.scalars(
         select(models.Job).where(
             models.Job.type == JobType.TG_IMPORT.value,
@@ -205,9 +224,9 @@ def tg_view(media_id: int, request: Request, db: DbDep, actor: ActorDep) -> dict
 
 @router.get("/media/{media_id}/view")
 def tg_view_file(media_id: int, db: DbDep, t: str | None = None) -> FileResponse:
-    if not signing.verify(t, media_id, "tg-view"):
+    if not signing.verify(t, media_id, "tg-view", scope.current_project_id(db)):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Ссылка устарела")
-    row = tg_service.get_media(db, media_id)
+    row = _media_row(db, media_id)
     path = previews.cached(get_settings(), row.message_id, row.topic_id)
     if path is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Файл ещё не загружен для просмотра")
@@ -226,9 +245,7 @@ class ImportIn(BaseModel):
 @router.post("/import", status_code=status.HTTP_202_ACCEPTED)
 def tg_import(body: ImportIn, request: Request, db: DbDep, actor: ActorDep) -> dict[str, Any]:
     """Отметили файлы → сервер скачает оригиналы, сделает превью и привяжет к карточке."""
-    project = projects.get_project(db)
-    if project is None:
-        raise NotFoundError("Проект не создан")
+    project = projects.current(db)
     job = tg_service.queue_import(
         db,
         actor,

@@ -53,7 +53,7 @@ test.describe('раскладки', () => {
     await page.goto('/nowhere')
     await expect(page.getByRole('heading', { name: 'Такого раздела нет' })).toBeVisible()
     await page.getByRole('link', { name: 'На дашборд' }).click()
-    await expect(page).toHaveURL(/\/$/)
+    await expect(page).toHaveURL(/\/p\/brass-spyglass\/?$/)
   })
 
   test('области касания элементов навигации не меньше 44 × 44 px', async ({ page, isMobile }) => {

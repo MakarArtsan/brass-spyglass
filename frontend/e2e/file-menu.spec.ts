@@ -69,7 +69,7 @@ test.describe('меню файла: убрать с карточки и удал
     expect(messages[0]).toContain(tag)
     expect(messages[0]).toContain('Убрать с карточки') // подсказка, как не удалять лишнего
     await expect(page.getByText('Файл удалён', { exact: true })).toBeVisible()
-    const gone = await page.context().request.get(`/api/files/${file.id}`)
+    const gone = await page.context().request.get(`/api/p/brass-spyglass/files/${file.id}`)
     expect(gone.status()).toBe(404)
   })
 

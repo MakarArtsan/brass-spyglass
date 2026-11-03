@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom'
 import { Logo } from '@/components/Logo'
+import { ProjectSwitcher } from '@/components/ProjectSwitcher'
 import { UserMenu } from '@/components/UserMenu'
 import type { Abilities, User } from '@/lib/api'
 import { visibleNav, type NavItem } from '@/nav'
@@ -45,6 +46,7 @@ export function NavGroups({ abilities, onNavigate, skipPhoneItems = false, colum
   const items = visibleNav(abilities).filter((i) => !(skipPhoneItems && i.phone))
   return (
     <>
+      <ProjectSwitcher />
       {(['main', 'service'] as const).map((group) => (
         <div key={group} className="flex flex-col gap-0.5">
           <div className="px-3 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-fog/70">

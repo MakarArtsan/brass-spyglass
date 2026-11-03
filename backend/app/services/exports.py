@@ -85,10 +85,12 @@ def load_plan(
     base_url: str = "",
     target: str = ExportTarget.RESOLVE.value,
     use_files: bool = True,
+    project_id: int | None = None,
 ) -> Plan:
-    project = projects.get_project(db)
+    """План экспорта проекта: по умолчанию проекта сессии, в фоне — проекта задачи."""
+    project = db.get(models.Project, project_id) if project_id else projects.current(db)
     if project is None:
-        raise ValidationError("Проект не создан")
+        raise ValidationError("Проект не найден")
     scenes = list(
         db.scalars(
             select(models.Scene)
@@ -285,9 +287,7 @@ def create(
         raise ValidationError(f"Неизвестная программа: {target}")
     if level not in {lv.value for lv in Level}:
         raise ValidationError(f"Неизвестный уровень: {level}")
-    project = projects.get_project(db)
-    if project is None:
-        raise ValidationError("Проект не создан")
+    project = projects.current(db)
     row = models.ExportJob(
         project_id=project.id,
         target=target,
@@ -356,8 +356,9 @@ def run(export_id: int, job_id: int, settings: Settings) -> None:
             media_root=str(opts.get("media_root") or ""),
             base_url=str(opts.get("base_url") or ""),
             target=row.target,
+            project_id=row.project_id,
         )
-        limit = projects.get_project(db).storage_limit_gb  # type: ignore[union-attr]
+        limit = db.get(models.Project, row.project_id).storage_limit_gb  # type: ignore[union-attr]
         stamp = row.created_at.strftime("%Y%m%d-%H%M%S")
         name = f"brass-spyglass-{row.id:04d}-{row.target}-{stamp}.zip"
     if not plan.spec.clips:

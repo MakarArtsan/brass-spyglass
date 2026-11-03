@@ -19,9 +19,22 @@ export async function signIn(context: BrowserContext, role: Role = 'owner') {
   await context.addCookies([{ name: 'bs_session', value, url: BASE_URL, httpOnly: true }])
 }
 
+/** `/shots` → `/p/brass-spyglass/shots`: страницы проекта открываются сразу по адресу проекта.
+ * Вход (`/login`), уже полные адреса и внешние ссылки остаются как есть. Старые ссылки без проекта
+ * проверяет `projects.spec.ts` (на абсолютном адресе, который это не трогает). */
+export function inProject(url: string): string {
+  if (!url.startsWith('/') || url.startsWith('/login') || url.startsWith('/p/') || url.startsWith('/api/')) return url
+  return `/p/brass-spyglass${url}`
+}
+
 export const test = base.extend<{ asRole: (role: Role) => Promise<void> }>({
   asRole: async ({ context }, use) => {
     await use((role) => signIn(context, role))
+  },
+  page: async ({ page }, use) => {
+    const goto = page.goto.bind(page)
+    page.goto = ((url: string, options?: Parameters<typeof goto>[1]) => goto(inProject(url), options)) as typeof page.goto
+    await use(page)
   },
 })
 
@@ -29,7 +42,7 @@ export { expect }
 
 /** JSON-запрос к API от имени уже вошедшего в этом контексте пользователя. */
 export async function api<T = unknown>(page: Page, method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', url: string, data?: unknown): Promise<T> {
-  const res = await page.context().request.fetch(`${BASE_URL}/api${url}`, { method, data })
+  const res = await page.context().request.fetch(`${BASE_URL}/api/p/brass-spyglass${url}`, { method, data })
   if (!res.ok()) throw new Error(`${method} ${url} → ${res.status()} ${await res.text()}`)
   return (res.status() === 204 ? null : await res.json()) as T
 }
@@ -111,7 +124,7 @@ export async function uploadViaApi(
 ): Promise<{ file: { id: number; original_name: string } }> {
   const data = fs.readFileSync(filePath)
   const init = await api<{ id: string }>(page, 'POST', '/uploads', { name: path.basename(filePath), size: data.length })
-  const sent = await page.context().request.patch(`${BASE_URL}/api/uploads/${init.id}`, {
+  const sent = await page.context().request.patch(`${BASE_URL}/api/p/brass-spyglass/uploads/${init.id}`, {
     data,
     headers: { 'Upload-Offset': '0', 'Content-Type': 'application/octet-stream' },
   })

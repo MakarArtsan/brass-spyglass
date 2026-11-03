@@ -43,7 +43,7 @@ test.describe('аниматик', () => {
       await page.getByRole('button', { name: 'Смотреть фильм' }).click()
       const player = page.getByRole('dialog', { name: 'Смотреть фильм' })
       await expect(player.locator('video')).toBeVisible()
-      await expect(player.locator('video')).toHaveAttribute('src', /\/api\/files\/\d+\/(original|proxy)/)
+      await expect(player.locator('video')).toHaveAttribute('src', /\/api\/p\/brass-spyglass\/files\/\d+\/(original|proxy)/)
     } finally {
       await api(page, 'PUT', `/shots/${first.id}/final`, { file_id: null })
       await api(page, 'DELETE', `/files/${file.id}`)

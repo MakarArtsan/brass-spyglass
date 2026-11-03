@@ -98,7 +98,7 @@ test.describe('загрузка файлов', () => {
     for (let i = 0; i < bytes.length; i += 4096) bytes.writeUInt32LE((i * 2654435761) >>> 0, i)
     fs.writeFileSync(big, bytes)
     let cut = 0
-    await page.route('**/api/uploads/*', (route) => {
+    await page.route('**/api/p/brass-spyglass/uploads/*', (route) => {
       const request = route.request()
       if (request.method() === 'PATCH' && request.headers()['upload-offset'] === String(8 * 1024 * 1024) && cut === 0) {
         cut += 1

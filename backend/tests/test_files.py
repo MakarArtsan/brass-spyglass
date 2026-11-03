@@ -64,22 +64,23 @@ def upload(
     name: str | None = None,
     *,
     chunk: int = 64 * 1024,
+    base: str = "/api",
     **complete,
 ):
     data = path if isinstance(path, bytes) else path.read_bytes()
     name = name or path.name  # type: ignore[union-attr]
-    init = client.post("/api/uploads", json={"name": name, "size": len(data)})
+    init = client.post(f"{base}/uploads", json={"name": name, "size": len(data)})
     assert init.status_code == 201, init.text
     upload_id, offset = init.json()["id"], 0
     while offset < len(data):
         response = client.patch(
-            f"/api/uploads/{upload_id}",
+            f"{base}/uploads/{upload_id}",
             content=data[offset : offset + chunk],
             headers={"Upload-Offset": str(offset)},
         )
         assert response.status_code == 200, response.text
         offset = response.json()["offset"]
-    return client.post(f"/api/uploads/{upload_id}/complete", json=complete)
+    return client.post(f"{base}/uploads/{upload_id}/complete", json=complete)
 
 
 def wait_for(
@@ -352,7 +353,7 @@ def test_upload_straight_into_a_card_and_takes_counter(api, media):
     row = first_shot(api)
     assert row["takes_count"] == 1 and row["files_count"] == 1
     assert row["preview"]["file_id"] == file_id and row["preview"]["url"].startswith(
-        f"/api/files/{file_id}/thumb"
+        f"/api/p/brass-spyglass/files/{file_id}/thumb"
     )
 
     other = first_shot(api, "01.02")  # тот же файл на другой карточке — без повторной загрузки

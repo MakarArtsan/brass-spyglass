@@ -156,7 +156,7 @@ def test_0006_runs_on_a_database_where_other_tables_point_at_file_and_job(env):
 
     db = sqlite3.connect(path)
     db.execute("PRAGMA foreign_keys=ON")
-    assert db.execute("select version_num from alembic_version").fetchone() == ("0007",)  # head
+    assert db.execute("select version_num from alembic_version").fetchone() == ("0008",)  # head
     # данные на месте, ссылки целы
     assert db.execute("select id, original_name, no_compress from file").fetchall() == [
         (1, "a.png", 0)
@@ -209,7 +209,7 @@ def test_a_leftover_from_a_failed_migration_does_not_block_the_next_start(env):
     command.upgrade(_cfg(), "head")
 
     db = sqlite3.connect(path)
-    assert db.execute("select version_num from alembic_version").fetchone() == ("0007",)  # head
+    assert db.execute("select version_num from alembic_version").fetchone() == ("0008",)  # head
     left = db.execute("select name from sqlite_master where name like '_alembic_tmp%'").fetchall()
     assert left == []
     assert db.execute("select count(*) from file").fetchone() == (1,)
@@ -258,7 +258,7 @@ def test_0007_gives_projects_slugs_and_turns_users_into_members(env):
 
     db = sqlite3.connect(path)
     db.execute("PRAGMA foreign_keys=ON")
-    assert db.execute("select version_num from alembic_version").fetchone() == ("0007",)
+    assert db.execute("select version_num from alembic_version").fetchone() == ("0008",)
     assert db.execute("select slug, tg_chat_id, archived_at from project").fetchall() == [
         ("the-brass-spyglass", None, None)
     ]
@@ -309,4 +309,87 @@ def test_0007_gives_distinct_slugs_when_names_collide_or_are_not_latin(env):
     db = sqlite3.connect(path)
     slugs = [r[0] for r in db.execute("select slug from project order by id")]
     assert slugs == ["the-brass-spyglass", "project-2", "project-3"]
+    db.close()
+
+
+# --- 0008: у уведомления появляется проект ------------------------------------------------------------
+
+
+def _notification(db: sqlite3.Connection, nid: int, user_id: int, kind: str = "comment") -> None:
+    db.execute(
+        "insert into notification(id,user_id,actor_id,kind,entity_type,entity_id,count,snippet,"
+        "created_at,read_at) values (?,?,NULL,?,'shot',5,2,'привет',?,NULL)",
+        (nid, user_id, kind, NOW),
+    )
+
+
+def test_0008_attaches_existing_notifications_to_the_first_project(env):
+    path = _populated_0006(env)
+    command.upgrade(_cfg(), "0007")
+    db = sqlite3.connect(path)
+    db.execute("PRAGMA foreign_keys=ON")
+    db.execute(
+        "insert into project(id,title,title_en,contest,deadline_official,deadline_internal,fps,"
+        "width,height,target_min_sec,target_max_sec,storage_limit_gb,created_at,updated_at,slug)"
+        " values (2,'Второй','Second','c',?,?,24,1,1,1,2,5,?,?,'second')",
+        (NOW, NOW, NOW, NOW),
+    )
+    for nid, uid, kind in ((1, 1, "comment"), (2, 2, "file"), (3, 2, "version")):
+        _notification(db, nid, uid, kind)
+    db.commit()
+    db.close()
+
+    command.upgrade(_cfg(), "head")
+
+    db = sqlite3.connect(path)
+    db.execute("PRAGMA foreign_keys=ON")
+    assert db.execute(
+        "select id, project_id, kind, count, snippet from notification order by id"
+    ).fetchall() == [
+        (1, 1, "comment", 2, "привет"),
+        (2, 1, "file", 2, "привет"),
+        (3, 1, "version", 2, "привет"),
+    ]
+    assert db.execute("pragma foreign_key_check").fetchall() == []
+    columns = {r[1]: r for r in db.execute("pragma table_info(notification)")}
+    assert columns["project_id"][3] == 1  # NOT NULL
+    assert db.execute(
+        "select name from sqlite_master where name='ix_notification_project_id'"
+    ).fetchone()
+    assert db.execute("pragma foreign_key_list(notification)").fetchall()
+    # прежние ограничения и индекс на месте, а проект обязателен
+    for bad in (
+        "insert into notification(user_id,project_id,kind,entity_type,entity_id,count,created_at)"
+        f" values (1,1,'nonsense','shot',1,1,'{NOW}')",
+        "insert into notification(user_id,project_id,kind,entity_type,entity_id,count,created_at)"
+        f" values (1,999,'comment','shot',1,1,'{NOW}')",  # нет такого проекта
+        "insert into notification(user_id,kind,entity_type,entity_id,count,created_at)"
+        f" values (1,'comment','shot',1,1,'{NOW}')",  # без проекта
+    ):
+        try:
+            db.execute(bad)
+        except sqlite3.IntegrityError:
+            pass
+        else:
+            raise AssertionError(f"ограничение не сработало: {bad[:70]}")
+    assert db.execute("select name from sqlite_master where name='ix_notification_user'").fetchone()
+    db.close()
+
+
+def test_0008_drops_notifications_when_there_is_no_project_to_attach_them_to(env):
+    path = _populated_0006(env)
+    command.upgrade(_cfg(), "0007")
+    db = sqlite3.connect(path)
+    db.execute("PRAGMA foreign_keys=OFF")  # так готовим странное состояние, в рабочей базе его нет
+    for table in ("project_member", "project"):
+        db.execute(f"delete from {table}")
+    _notification(db, 1, 1)
+    db.commit()
+    db.close()
+
+    command.upgrade(_cfg(), "head")
+
+    db = sqlite3.connect(path)
+    assert db.execute("select version_num from alembic_version").fetchone() == ("0008",)
+    assert db.execute("select count(*) from notification").fetchone() == (0,)
     db.close()

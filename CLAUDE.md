@@ -56,6 +56,7 @@ backend/app/
   models.py                 вся схема данных (SQLAlchemy 2)
   db.py                     SQLite в режиме WAL, UTCDateTime (наивное время запрещено)
   permissions.py            матрица ролей из ТЗ — единственное место
+  scope.py                  изоляция проектов: фильтр проекта на каждый запрос к ORM и проверка записи (`ProjectScopeError`)
   metrics.py                вычисляемое: таймкоды, суммы, готовность, дашборд, сгорание, раскладка таймлайна (с тестами)
   export_plan.py, exporter.py  экспорт в Resolve/Premiere: чистый план (порядок, кадры, звук, SRT) и сборка zip (OTIO, FCP7 XML)
   backup.py, maintenance.py ночные бэкапы базы (VACUUM INTO, 14 копий, отправка владельцу) и фоновое обслуживание
@@ -80,6 +81,7 @@ backend/app/
   imagecompress.py          сжатие картинок: чистые функции (pngquant + oxipng, mozjpeg, конвертация HEIC/BMP/TIFF)
   signing.py                подписанные ссылки на файлы (TTL 1 ч)
   auth/                     вход: токены, бот и юзербот (Telethon), сессия-cookie, Login Widget
+  api/access.py             `project_access`: slug из адреса → членство и роль → проект сессии; чужое и нет такого — 404
   api/                      роутеры FastAPI: entities, files (загрузка, версии, медиатека, ссылки), dashboard,
                             events (SSE), telegram (окно «Добавить из Telegram»), animatic, exports,
                             notifications, serialize
@@ -102,6 +104,13 @@ frontend/e2e/               Playwright (desktop 1440 + phone 390); fixtures.ts, 
 
 ## Договорённости
 
+- **Мультипроектность.** Всё, что относится к проекту, — под `/api/p/<slug>/…` (роутер подключается в `main.py` с
+  `Depends(project_access)`); вне проектов только `/api/health`, `/api/auth/*`, `/api/session`, `/api/projects`, аватары.
+  Сессия API знает свой проект (`scope.py`), запрос к моделям с `project_id` фильтруется сам, запись в чужой проект
+  невозможна; в сервисах проект берётся из сессии (`projects.current(db)`), не из аргументов клиента. Воркеру и
+  скриптам проект выбирает `scope.project_session(project_id)`. Новый маршрут автоматически проверяется
+  `tests/test_isolation.py` (список из OpenAPI): он должен отвечать чужим 404. Роль — на паре «человек + проект»
+  (`project_member`), не на `user`. Во фронтенде проект — `/p/<slug>`, пути запросов дополняет `lib/project.ts`.
 - **Запись в БД только через `app/services`.** Права проверяются в сервисе, не в роутере. Автор
   (`created_by`/`uploaded_by`) ставится из сессии и не принимается от клиента.
 - **Вычисляемое не хранится** (таймкоды сцен, суммы, % готовности, доля Seedance, активность) —

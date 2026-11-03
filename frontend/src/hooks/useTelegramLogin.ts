@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { meKey } from '@/hooks/useAuth'
+import { meKey, sessionKey } from '@/hooks/useAuth'
 import { api, ApiError, type LoginToken, type User } from '@/lib/api'
 
 export type LoginState =
@@ -27,7 +27,11 @@ export function useTelegramLogin() {
   useEffect(() => stop, [stop])
 
   const finish = useCallback(async () => {
-    await qc.invalidateQueries({ queryKey: meKey })
+    // Вне проектов экран входа и переход в проект слушают `session`; внутри проекта — `me`.
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: sessionKey }),
+      qc.invalidateQueries({ queryKey: meKey }),
+    ])
     navigate('/', { replace: true })
   }, [qc, navigate])
 

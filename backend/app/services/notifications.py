@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
-from app import models
+from app import models, scope
 from app.constants import EntityType, NotificationKind
 from app.db import utcnow
 
@@ -45,7 +45,16 @@ def card_of(db: Session, entity_type: str, entity_id: int) -> tuple[str, int]:
 
 
 def _recipients(db: Session, actor_id: int | None) -> list[int]:
-    stmt = select(models.User.id).where(models.User.access_revoked_at.is_(None))
+    """Получатели — участники проекта, в котором произошло событие (состоящие в его чате)."""
+    stmt = (
+        select(models.User.id)
+        .join(models.ProjectMember, models.ProjectMember.user_id == models.User.id)
+        .where(
+            models.ProjectMember.project_id == scope.current_project_id(db),
+            models.ProjectMember.active.is_(True),
+            models.User.access_revoked_at.is_(None),
+        )
+    )
     if actor_id is not None:
         stmt = stmt.where(models.User.id != actor_id)
     return list(db.scalars(stmt))

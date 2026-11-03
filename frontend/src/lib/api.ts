@@ -1,3 +1,5 @@
+import { apiPath } from '@/lib/project'
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -24,7 +26,7 @@ function takeEarly(path: string, init: RequestInit): Promise<Response> | undefin
 }
 
 function send(path: string, init: RequestInit): Promise<Response> {
-  return fetch(`/api${path}`, {
+  return fetch(`/api${apiPath(path)}`, {
     credentials: 'same-origin',
     ...init,
     headers: { ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...init.headers },
@@ -80,8 +82,24 @@ export interface Me {
   abilities: Abilities
 }
 
+export interface ProjectBrief {
+  slug: string
+  title: string
+  title_en: string
+  role: User['role']
+  archived: boolean
+}
+
+/** Кто вошёл и какие проекты ему открыты (вне проекта). */
+export interface SessionInfo {
+  user: User
+  is_superadmin: boolean
+  projects: ProjectBrief[]
+}
+
 export interface Project {
   id: number
+  slug: string
   title: string
   title_en: string
   contest: string

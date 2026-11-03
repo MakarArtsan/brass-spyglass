@@ -7,7 +7,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import GZipMiddleware
@@ -15,7 +15,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app import backup, events, uploads
 from app import db as database
-from app.api import animatic, dashboard, entities, health, me
+from app.api import access, animatic, dashboard, entities, health, me
 from app.api import auth as auth_api
 from app.api import events as events_api
 from app.api import exports as exports_api
@@ -154,17 +154,26 @@ def create_app() -> FastAPI:
         return JSONResponse({"detail": str(exc)}, status_code=409)
 
     app.add_middleware(SelectiveGZip)
+    # Вне проектов: здоровье, вход, кто я и мои проекты.
     app.include_router(health.router, prefix="/api")
     app.include_router(auth_api.router, prefix="/api")
     app.include_router(me.router, prefix="/api")
-    app.include_router(entities.router, prefix="/api")
-    app.include_router(dashboard.router, prefix="/api")
-    app.include_router(animatic.router, prefix="/api")
-    app.include_router(exports_api.router, prefix="/api")
-    app.include_router(notifications_api.router, prefix="/api")
-    app.include_router(telegram_api.router, prefix="/api")
-    app.include_router(files_api.router, prefix="/api")
-    app.include_router(events_api.router, prefix="/api")
+    # Внутри проекта: `/api/p/<slug>/…`. Общий обработчик проверяет членство и выбирает проект,
+    # после чего запросы к данным проекта фильтруются сами (`scope.py`); чужое и нет проекта — 404.
+    inside = {"prefix": "/api/p/{slug}", "dependencies": [Depends(access.project_access)]}
+    for router in (
+        me.project_router,
+        entities.router,
+        dashboard.router,
+        animatic.router,
+        exports_api.router,
+        notifications_api.router,
+        telegram_api.router,
+        files_api.router,
+    ):
+        app.include_router(router, **inside)
+    # Поток событий проверяет доступ сам и держит базу занятой только на проверку.
+    app.include_router(events_api.router, prefix="/api/p/{slug}")
 
     @app.api_route("/api/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
     async def _api_not_found(rest: str) -> JSONResponse:

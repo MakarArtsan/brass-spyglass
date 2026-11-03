@@ -11,6 +11,7 @@ import { toast } from '@/lib/toast'
 import { useAssets, useEntityFiles, useFileMutations, useMeta, useSetFinal, useShot, useShotAsset, useUpdate } from '@/lib/queries'
 import type { Shot, StatusKey } from '@/lib/types'
 import { ru } from '@/ru'
+import { apiHref } from '@/lib/project'
 
 const options = (values: string[] | undefined, labels: Record<string, string>) =>
   (values ?? []).map((v) => ({ value: v, label: labels[v] ?? v }))
@@ -221,7 +222,7 @@ export function ShotCard({ shotId }: { shotId: number }) {
 
       {shot.files_count > 0 && (
         <a
-          href={`/api/entities/shot/${shot.id}/zip`}
+          href={apiHref(`/entities/shot/${shot.id}/zip`)}
           className="inline-flex min-h-touch items-center gap-2 text-sm text-brass hover:text-brass-light"
         >
           <Download size={16} />
