@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app import models
 from app.constants import USER_COLORS, Role
 from app.db import utcnow
+from app.services import members
 from app.services.core import log_activity
 
 SEEN_THROTTLE = timedelta(minutes=1)
@@ -46,6 +47,10 @@ def upsert_from_telegram(
     user.last_seen_at = now
     user.access_revoked_at = None
     db.flush()
+    # Пока проект один, вошедший — его участник (с чатами на проект это решит синхронизация).
+    project = db.scalar(select(models.Project).order_by(models.Project.id).limit(1))
+    if project is not None:
+        members.ensure(db, project, user)
     log_activity(db, user.id, "login", "user", user.id, {"created": created})
     return user
 

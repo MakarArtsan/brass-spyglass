@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     tg_bot_username: str = ""  # необязательно: иначе берём через get_me()
     tg_chat_id: int | None = None  # закрытый чат команды
     owner_tg_id: int | None = None
+    # Суперадмины (создают проекты, видят все): tg_id через запятую; OWNER_TG_ID — тоже суперадмин.
+    superadmin_tg_ids: str = ""
 
     session_secret: str = ""
     session_days: int = 30
@@ -48,6 +50,20 @@ class Settings(BaseSettings):
         if isinstance(value, str):
             return "".join(value.split()).strip("'\"")
         return value
+
+    @property
+    def superadmins(self) -> frozenset[int]:
+        ids = {
+            int(p)
+            for p in self.superadmin_tg_ids.replace(";", ",").split(",")
+            if p.strip().lstrip("-").isdigit()
+        }
+        if self.owner_tg_id is not None:
+            ids.add(self.owner_tg_id)
+        return frozenset(ids)
+
+    def is_superadmin(self, tg_id: int | None) -> bool:
+        return tg_id is not None and tg_id in self.superadmins
 
     @computed_field  # type: ignore[prop-decorator]
     @property

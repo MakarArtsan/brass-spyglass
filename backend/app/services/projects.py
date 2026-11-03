@@ -1,17 +1,22 @@
-"""Проект фильма. Схема допускает второй проект, интерфейса под него нет."""
+"""Проекты: у каждого адрес `/p/<slug>` и свой закрытый чат команды."""
 
+import re
 from datetime import UTC, datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import models
+from app.config import Settings, get_settings
 from app.services.core import log_activity
 
 # Дубай: UTC+4 круглый год, без перехода на летнее время, поэтому tzdata не нужен.
 DUBAI = timezone(timedelta(hours=4))
 
+DEFAULT_SLUG = "brass-spyglass"
+
 DEFAULT_PROJECT = {
+    "slug": DEFAULT_SLUG,
     "title": "Битва при кривом зеркале",
     "title_en": "The Brass Spyglass",
     "contest": "1 Billion AI Film Award 2027",
@@ -33,12 +38,41 @@ def get_project(db: Session) -> models.Project | None:
     return db.scalar(select(models.Project).order_by(models.Project.id).limit(1))
 
 
-def ensure_default_project(db: Session) -> models.Project:
-    """Первый запуск: создаёт проект фильма. Дальше настройки правят в интерфейсе."""
+def slugify(text: str, fallback: str = "project") -> str:
+    """Адрес из названия: латиница, цифры и дефисы; пусто — запасное имя."""
+    base = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:60]
+    return base or fallback
+
+
+def unique_slug(db: Session, wanted: str) -> str:
+    slug, n = wanted, 2
+    while db.scalar(select(models.Project.id).where(models.Project.slug == slug)) is not None:
+        slug, n = f"{wanted}-{n}", n + 1
+    return slug
+
+
+def get_by_slug(db: Session, slug: str) -> models.Project | None:
+    return db.scalar(select(models.Project).where(models.Project.slug == slug))
+
+
+def get_by_chat(db: Session, chat_id: int) -> models.Project | None:
+    return db.scalar(select(models.Project).where(models.Project.tg_chat_id == chat_id))
+
+
+def ensure_default_project(db: Session, settings: Settings | None = None) -> models.Project:
+    """Первый запуск: создаёт проект фильма. Дальше настройки правят в интерфейсе.
+
+    Чат, который до мультипроектности задавался переменной `TG_CHAT_ID`, становится чатом этого
+    проекта (если у него своего чата ещё нет и чат не занят другим проектом)."""
+    settings = settings or get_settings()
     project = get_project(db)
     if project is None:
         project = models.Project(**DEFAULT_PROJECT)
         db.add(project)
         db.flush()
         log_activity(db, None, "create", "project", project.id, project_id=project.id)
+    chat = settings.tg_chat_id
+    if chat is not None and project.tg_chat_id is None and get_by_chat(db, chat) is None:
+        project.tg_chat_id = chat
+        db.flush()
     return project
