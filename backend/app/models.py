@@ -128,6 +128,32 @@ class Project(Timestamps, Base):
     target_min_sec: Mapped[int] = mapped_column(Integer, default=300)
     target_max_sec: Mapped[int] = mapped_column(Integer, default=420)
     storage_limit_gb: Mapped[float] = mapped_column(Float, default=5.0)
+    # Мультипроектность: адрес `/p/<slug>`, закрытый чат команды (один чат — один проект), архив.
+    slug: Mapped[str] = mapped_column(String(64), unique=True)
+    tg_chat_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, default=None)
+    archived_at: Mapped[datetime | None] = mapped_column(UTCDateTime, default=None)
+
+
+class ProjectMember(Timestamps, Base):
+    """Человек в проекте. Роль и цвет живут на паре «человек + проект»: в одном проекте он режиссёр,
+    в другом просто команда. Вышел из чата — `active` снимается, но запись и авторство остаются, при
+    повторном вступлении роль восстанавливается."""
+
+    __tablename__ = "project_member"
+    __table_args__ = (
+        CheckConstraint(check_in("role", Role), name="role"),
+        UniqueConstraint("project_id", "user_id"),
+        Index("ix_project_member_user", "user_id", "active"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("project.id"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"))
+    role: Mapped[str] = mapped_column(String(16), default=Role.TEAM.value)
+    color: Mapped[str] = mapped_column(String(9))
+    active: Mapped[bool] = mapped_column(default=True)
+    joined_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    left_at: Mapped[datetime | None] = mapped_column(UTCDateTime, default=None)
 
 
 class User(Timestamps, Base):

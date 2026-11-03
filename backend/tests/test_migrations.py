@@ -156,7 +156,7 @@ def test_0006_runs_on_a_database_where_other_tables_point_at_file_and_job(env):
 
     db = sqlite3.connect(path)
     db.execute("PRAGMA foreign_keys=ON")
-    assert db.execute("select version_num from alembic_version").fetchone() == ("0006",)
+    assert db.execute("select version_num from alembic_version").fetchone() == ("0007",)  # head
     # данные на месте, ссылки целы
     assert db.execute("select id, original_name, no_compress from file").fetchall() == [
         (1, "a.png", 0)
@@ -209,7 +209,7 @@ def test_a_leftover_from_a_failed_migration_does_not_block_the_next_start(env):
     command.upgrade(_cfg(), "head")
 
     db = sqlite3.connect(path)
-    assert db.execute("select version_num from alembic_version").fetchone() == ("0006",)
+    assert db.execute("select version_num from alembic_version").fetchone() == ("0007",)  # head
     left = db.execute("select name from sqlite_master where name like '_alembic_tmp%'").fetchall()
     assert left == []
     assert db.execute("select count(*) from file").fetchone() == (1,)
@@ -226,3 +226,87 @@ def test_app_connections_keep_foreign_keys_on_after_migrating(env):
     with engine.connect() as conn:
         assert conn.exec_driver_sql("PRAGMA foreign_keys").scalar() == 1
     engine.dispose()
+
+
+# --- 0007: проекты получают адрес и чат, участники — роль на паре «человек + проект» ------------------
+
+
+def _populated_0006(env: Path) -> Path:
+    path = _populated_0005(env)
+    command.upgrade(_cfg(), "0006")
+    db = sqlite3.connect(path)
+    db.execute("PRAGMA foreign_keys=ON")
+    db.execute("update project set title_en='The Brass Spyglass: Битва!' where id=1")
+    for uid, name, role, color, revoked in (
+        (1, "Артём", "owner", "#aa0000", None),
+        (2, "Лена", "team", "#00aa00", None),
+        (3, "Игорь", "director", "#0000aa", NOW),
+    ):
+        db.execute(
+            "insert into user(id,tg_id,name,color,role,created_at,updated_at,access_revoked_at)"
+            " values (?,?,?,?,?,?,?,?)",
+            (uid, 100 + uid, name, color, role, NOW, NOW, revoked),
+        )
+    db.commit()
+    db.close()
+    return path
+
+
+def test_0007_gives_projects_slugs_and_turns_users_into_members(env):
+    path = _populated_0006(env)
+    command.upgrade(_cfg(), "head")
+
+    db = sqlite3.connect(path)
+    db.execute("PRAGMA foreign_keys=ON")
+    assert db.execute("select version_num from alembic_version").fetchone() == ("0007",)
+    assert db.execute("select slug, tg_chat_id, archived_at from project").fetchall() == [
+        ("the-brass-spyglass", None, None)
+    ]
+    members = db.execute(
+        "select user_id, role, color, active from project_member order by user_id"
+    ).fetchall()
+    assert members == [
+        (1, "owner", "#aa0000", 1),
+        (2, "team", "#00aa00", 1),
+        (3, "director", "#0000aa", 0),  # вышедший остаётся записью, но не активен
+    ]
+    assert db.execute("pragma foreign_key_check").fetchall() == []
+    # у файлов и вложений всё на месте
+    assert db.execute("select count(*) from file").fetchone() == (1,)
+    assert db.execute("select count(*) from attachment").fetchone() == (1,)
+    # адрес и чат уникальны, роль проверяется
+    for bad in (
+        "insert into project(title,title_en,contest,deadline_official,deadline_internal,fps,width,"
+        "height,target_min_sec,target_max_sec,storage_limit_gb,created_at,updated_at,slug)"
+        f" values ('a','a','c','{NOW}','{NOW}',24,1,1,1,2,5,'{NOW}','{NOW}','the-brass-spyglass')",
+        "insert into project_member(project_id,user_id,role,color,active,joined_at,created_at,"
+        f"updated_at) values (1,1,'owner','#000000',1,'{NOW}','{NOW}','{NOW}')",  # дубль пары
+        "insert into project_member(project_id,user_id,role,color,active,joined_at,created_at,"
+        f"updated_at) values (1,3,'nonsense','#000000',1,'{NOW}','{NOW}','{NOW}')",
+    ):
+        try:
+            db.execute(bad)
+        except sqlite3.IntegrityError:
+            pass
+        else:
+            raise AssertionError(f"ограничение не сработало: {bad[:60]}")
+    db.close()
+
+
+def test_0007_gives_distinct_slugs_when_names_collide_or_are_not_latin(env):
+    path = _populated_0006(env)
+    db = sqlite3.connect(path)
+    for pid, title in ((2, "Битва"), (3, "Битва")):
+        db.execute(
+            "insert into project(id,title,title_en,contest,deadline_official,deadline_internal,fps,"
+            "width,height,target_min_sec,target_max_sec,storage_limit_gb,created_at,updated_at)"
+            " values (?,?,?,'c',?,?,24,1,1,1,2,5,?,?)",
+            (pid, title, title, NOW, NOW, NOW, NOW),
+        )
+    db.commit()
+    db.close()
+    command.upgrade(_cfg(), "head")
+    db = sqlite3.connect(path)
+    slugs = [r[0] for r in db.execute("select slug from project order by id")]
+    assert slugs == ["the-brass-spyglass", "project-2", "project-3"]
+    db.close()
