@@ -56,9 +56,16 @@ def _configure_sqlite(dbapi_conn: sqlite3.Connection, _record: object) -> None:
     dbapi_conn.create_function("unicode_fold", 1, _fold, deterministic=True)
 
 
+def _enforce_foreign_keys(dbapi_conn: sqlite3.Connection, _record: object, _proxy: object) -> None:
+    """Миграции выключают проверку внешних ключей на своём соединении; чтобы оно, вернувшись в пул,
+    не дало потом записать мимо ключей, при каждой выдаче из пула включаем её снова."""
+    dbapi_conn.execute("PRAGMA foreign_keys=ON")
+
+
 def make_engine(url: str) -> Engine:
     engine = create_engine(url, connect_args={"check_same_thread": False})
     event.listen(engine, "connect", _configure_sqlite)
+    event.listen(engine, "checkout", _enforce_foreign_keys)
     return engine
 
 
