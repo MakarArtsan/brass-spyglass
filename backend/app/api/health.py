@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app import backup
+from app import backup, imagecompress
 from app.config import Settings, get_settings
 from app.db import get_db
 
@@ -17,6 +17,17 @@ def _backup_state(settings: Settings) -> dict[str, object] | None:
     if last is None:
         return None
     return {"at": last.get("at"), "sent": last.get("sent"), "ok": last.get("error") is None}
+
+
+def _compression_state(settings: Settings) -> dict[str, bool]:
+    """Чем жмутся картинки: нет mozjpeg или pngquant — работает запасной путь на Pillow."""
+    tools = imagecompress.detect_tools(settings)
+    return {
+        "enabled": settings.compress_images,
+        "pngquant": tools.pngquant is not None,
+        "oxipng": tools.oxipng,
+        "mozjpeg": tools.cjpeg is not None,
+    }
 
 
 @router.get("/health")
@@ -34,6 +45,7 @@ def health(request: Request, db: Annotated[Session, Depends(get_db)]) -> dict[st
             "chat_configured": settings.tg_chat_id is not None,
         },
         "backup": _backup_state(settings),
+        "image_compression": _compression_state(settings),
         "session_secret_configured": bool(settings.session_secret),
         "owner_configured": settings.owner_tg_id is not None,
     }

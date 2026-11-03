@@ -99,6 +99,7 @@ def new_version(
     size_bytes: int,
     sha256: str,
     files_dir: Path,
+    compress: bool = True,
 ) -> models.File:
     """Сохраняет загруженное как следующую версию файла. Автор и время — от сервера."""
     permissions.require(permissions.can_upload(actor), "Гость не загружает файлы")
@@ -132,6 +133,7 @@ def new_version(
         sha256=sha256,
         files_dir=files_dir,
         extra={"version_group_id": group_id, "version_no": number, "is_current": True},
+        compress=compress,
     )
     for row in _targets(db, current.id):
         db.add(

@@ -8,22 +8,26 @@
 import asyncio
 import contextlib
 import logging
+import shutil
 import threading
 from collections.abc import Callable, Collection
 
 from sqlalchemy.orm import Session
 
 from app import db as database
-from app import linkpreview, media, models
+from app import imagecompress, linkpreview, media, models
 from app.config import Settings, get_settings
 from app.constants import FileKind, JobType
+from app.services import compression, jobs
 from app.services import files as file_service
-from app.services import jobs
 
 log = logging.getLogger(__name__)
 
 MAX_PARALLEL = 2
 IDLE_POLL_SEC = 2.0
+# Эти задачи идут строго по одной (ТЗ: загрузка из Telegram — защита аккаунта, сжатие картинок —
+# «в один поток»): пока одна выполняется, вторая того же типа ждёт, а слот достаётся другим.
+EXCLUSIVE = (JobType.TG_IMPORT.value, JobType.COMPRESS.value)
 
 
 def _file(db: Session, job: models.Job) -> models.File | None:
@@ -87,6 +91,36 @@ def _preview(db: Session, job: models.Job, settings: Settings) -> None:
     file_service.apply_media_info(db, file_id, thumb_path=thumb, **fields)
     if kind == FileKind.VIDEO and not playable:
         file_service.queue_proxy(db, file_id)
+    if kind == FileKind.IMAGE:
+        # Сжатие ставится после превью: оно читает исходный файл, а потом подменяет его.
+        fresh = db.get(models.File, file_id)
+        if fresh is not None:
+            compression.queue_if_eligible(db, fresh, settings)
+
+
+def _compress(db: Session, job: models.Job, settings: Settings) -> None:
+    """Сжимает картинку и тихо подменяет файл: он виден и доступен всё время (ТЗ)."""
+    file = _file(db, job)
+    if file is None or not compression.eligible(file, settings):
+        return
+    file_id, relative = file.id, file.path
+    source = settings.files_dir / relative  # type: ignore[operator]
+    ext = file_service.extension(relative)  # type: ignore[arg-type]
+    db.rollback()  # не держим транзакцию, пока кодировщики работают
+    work = settings.cache_dir / "compress" / str(file_id)
+    try:
+        try:
+            result = imagecompress.compress(source, ext, work)
+        except media.MediaError as exc:
+            log.warning("файл %s не сжат: %s", file_id, exc)
+            compression.mark_failed(db, file_id)  # оригинал остаётся как был
+            return
+        replaced = compression.apply(db, file_id, result, relative, settings)  # type: ignore[arg-type]
+        db.commit()  # прежний файл удаляется только после того, как запись в базе обновлена
+        if replaced.leftover is not None:
+            replaced.leftover.unlink(missing_ok=True)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
 
 
 def _waveform(db: Session, job: models.Job, settings: Settings) -> None:
@@ -151,6 +185,7 @@ HANDLERS: dict[str, Callable[[Session, models.Job, Settings], None]] = {
     JobType.EXPORT.value: _export,
     JobType.TG_IMPORT.value: _tg_import,
     JobType.PREVIEW.value: _preview,
+    JobType.COMPRESS.value: _compress,
     JobType.WAVEFORM.value: _waveform,
     JobType.PROXY.value: _proxy,
 }
@@ -158,13 +193,18 @@ HANDLERS: dict[str, Callable[[Session, models.Job, Settings], None]] = {
 
 def process_job(job_id: int) -> None:
     """Выполняет одну задачу; ошибка превращается в статус `failed`, а не в падение воркера."""
-    global _tg_running
+    try:
+        _process(job_id)
+    finally:
+        _release(job_id)  # что бы ни случилось, «по одной» не должно зависнуть занятым
+
+
+def _process(job_id: int) -> None:
     settings = get_settings()
     with database.session_factory()() as db:
         job = db.get(models.Job, job_id)
         if job is None:
             return
-        is_tg = job.type == JobType.TG_IMPORT.value
         try:
             handler = HANDLERS.get(job.type)
             if handler is None:
@@ -178,28 +218,30 @@ def process_job(job_id: int) -> None:
                 log.exception("задача %s упала", job_id)
             jobs.fail(db, job_id, str(exc) or exc.__class__.__name__)
             db.commit()
-        finally:
-            if is_tg:
-                with _tg_lock:
-                    _tg_running = max(0, _tg_running - 1)
 
 
-_tg_lock = threading.Lock()
-_tg_running = 0  # задач tg_import, взятых и ещё не завершённых
+_busy_lock = threading.Lock()
+_busy: dict[int, str] = {}  # id взятых и ещё не завершённых задач «по одной» → их тип
 
 
-def tg_busy() -> bool:
-    return _tg_running > 0
+def _release(job_id: int) -> None:
+    with _busy_lock:
+        _busy.pop(job_id, None)
+
+
+def busy_types() -> tuple[str, ...]:
+    """Типы «по одной», которые сейчас выполняются: новых такого типа брать нельзя."""
+    with _busy_lock:
+        return tuple(dict.fromkeys(_busy.values()))
 
 
 def claim_next_id(skip: Collection[str] = ()) -> int | None:
-    global _tg_running
     with database.session_factory()() as db:
         job = jobs.claim_next(db, skip)
         job_id = job.id if job else None
-        if job is not None and job.type == JobType.TG_IMPORT.value:
-            with _tg_lock:
-                _tg_running += 1
+        if job is not None and job.type in EXCLUSIVE:
+            with _busy_lock:
+                _busy[job.id] = job.type
         db.commit()
         return job_id
 
@@ -255,8 +297,8 @@ class JobRunner:
         while True:
             await self._slots.acquire()
             try:
-                # Загрузка из Telegram идёт по одной: вторая не должна занять слот ffmpeg впустую.
-                skip = (JobType.TG_IMPORT.value,) if tg_busy() else ()
+                # Загрузка из Telegram и сжатие идут по одной: вторая не должна занять слот впустую.
+                skip = busy_types()
                 job_id = await asyncio.to_thread(claim_next_id, *([skip] if skip else []))
             except Exception:
                 self._slots.release()

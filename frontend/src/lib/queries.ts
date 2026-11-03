@@ -323,6 +323,19 @@ export function useRollback() {
   })
 }
 
+/** «Вернуть оригинал»: сжатый файл заменяется тем, что загрузили (пока он лежит, 7 дней). */
+export function useRestoreOriginal() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (fileId: number) => api<FileItem>(`/files/${fileId}/restore-original`, { method: 'POST' }),
+    onSuccess: () => {
+      for (const k of ['files', 'library', 'file-versions', 'activity', 'dashboard']) {
+        qc.invalidateQueries({ queryKey: [k] })
+      }
+    },
+  })
+}
+
 /** Финальный файл сцены или шота (null — снять выбор). */
 export function useSetFinal(type: 'scene' | 'shot', id: number) {
   const qc = useQueryClient()

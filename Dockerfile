@@ -13,7 +13,25 @@ RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
-# --- 2. Итоговый образ: Python + ffmpeg ------------------------------------------------
+# --- 2. mozjpeg: кодировщик JPEG для сжатия картинок при загрузке --------------------
+# Статическая сборка одного `cjpeg`: в итоговый образ попадает только он. Сборка не должна ронять
+# весь образ: если она не удалась, каталог остаётся пустым, и JPEG сжимается кодировщиком Pillow
+# (те же настройки, чуть хуже сжатие); что именно работает — видно в /api/health.
+FROM ${PYTHON_IMAGE} AS mozjpeg
+ARG MOZJPEG_VERSION=4.1.5
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential cmake nasm curl ca-certificates libpng-dev zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
+RUN mkdir -p /opt/mozjpeg/bin \
+    && ( curl -fsSL "https://github.com/mozilla/mozjpeg/archive/refs/tags/v${MOZJPEG_VERSION}.tar.gz" | tar -xz -C /tmp \
+         && cmake -S "/tmp/mozjpeg-${MOZJPEG_VERSION}" -B /tmp/mozjpeg-build \
+              -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/opt/mozjpeg \
+              -DENABLE_SHARED=FALSE -DPNG_SUPPORTED=FALSE \
+         && cmake --build /tmp/mozjpeg-build -j"$(nproc)" \
+         && cmake --install /tmp/mozjpeg-build ) \
+    || echo "mozjpeg не собрался: JPEG будет сжиматься кодировщиком Pillow"
+
+# --- 3. Итоговый образ: Python + ffmpeg + pngquant -------------------------------------
 FROM ${PYTHON_IMAGE}
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -22,8 +40,11 @@ ENV PYTHONUNBUFFERED=1 \
     FRONTEND_DIR=/app/static
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core \
+    && apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core pngquant \
     && rm -rf /var/lib/apt/lists/*
+
+# JPEG для сжатия картинок (путь по умолчанию — CJPEG_BIN в config.py)
+COPY --from=mozjpeg /opt/mozjpeg/bin/ /opt/mozjpeg/bin/
 
 WORKDIR /app
 COPY backend/requirements.txt ./

@@ -6,6 +6,8 @@ export interface UploadTarget {
   purpose?: string
   /** Загрузить как новую версию этого файла: карточка не указывается, привязки переходят сами. */
   versionOf?: number
+  /** «Без сжатия»: картинка остаётся как загружена, бит в бит. */
+  noCompress?: boolean
 }
 
 export interface UploadHooks {
@@ -187,6 +189,7 @@ export async function uploadFile(
           purpose: target.purpose ?? 'reference',
           force: resume?.force ?? false,
           ...(target.versionOf != null ? { version_of: target.versionOf } : {}),
+          ...(target.noCompress ? { no_compress: true } : {}),
         }),
         signal: hooks.signal,
       })

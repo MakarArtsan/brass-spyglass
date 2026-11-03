@@ -205,6 +205,14 @@ export interface FileItem {
   uploaded_by: Person | null
   processing: boolean
   error: string | null
+  /** Сжатие картинки при загрузке: итог, оригинал на 7 дней и можно ли его вернуть. */
+  compression: {
+    state: 'done' | 'small_gain' | 'failed' | null
+    no_compress: boolean
+    original_size_bytes: number | null
+    original_until: string | null
+    can_restore: boolean
+  }
   urls: Partial<Record<'original' | 'thumb' | 'preview' | 'poster' | 'play' | 'waveform', string>>
 }
 
@@ -261,4 +269,6 @@ export interface LibraryPage {
   items: LibraryItem[]
   total: number
   next_before_id: number | null
+  /** Сколько места сэкономило сжатие картинок. */
+  compression: { files: number; saved_bytes: number }
 }

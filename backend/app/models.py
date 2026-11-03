@@ -29,6 +29,7 @@ from app.constants import (
     DRUM_LEVEL_RANGE,
     FPS_CHOICES,
     AssetType,
+    CompressState,
     EntityType,
     ExportTarget,
     FileKind,
@@ -309,6 +310,7 @@ class File(Base):
     __table_args__ = (
         CheckConstraint(check_in("kind", FileKind), name="kind"),
         CheckConstraint(check_in("source", FileSource), name="source"),
+        CheckConstraint(_check_nullable_in("compress_state", CompressState), name="compress_state"),
         # Повторный выбор того же сообщения Telegram не создаёт дубль.
         Index(
             "uq_file_tg_message",
@@ -352,6 +354,12 @@ class File(Base):
     uploaded_by: Mapped[int | None] = mapped_column(ForeignKey("user.id"), default=None)
     uploaded_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     deleted_at: Mapped[datetime | None] = mapped_column(UTCDateTime, default=None)
+    # Сжатие картинок. `sha256` и `uploaded_*` остаются от оригинала (дубли ищутся по нему).
+    no_compress: Mapped[bool] = mapped_column(default=False)  # «Без сжатия» при загрузке
+    compress_state: Mapped[str | None] = mapped_column(String(16), default=None)
+    compressed_at: Mapped[datetime | None] = mapped_column(UTCDateTime, default=None)
+    original_size_bytes: Mapped[int | None] = mapped_column(BigInteger, default=None)
+    original_path: Mapped[str | None] = mapped_column(String(1000), default=None)  # /data/originals
 
 
 class Attachment(Base):

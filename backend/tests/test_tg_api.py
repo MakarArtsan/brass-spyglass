@@ -226,6 +226,24 @@ async def test_the_same_message_is_attached_to_another_card_without_a_duplicate(
     assert library["total"] == 1 and library["items"][0]["attachments_count"] == 2
 
 
+async def test_telegram_photos_are_not_recompressed_but_image_documents_are(tg):
+    """ТЗ: фото из Telegram без повторного сжатия (Telegram уже пережал их сам); файлы, отправленные
+    документом (у них есть имя), жмутся как обычные."""
+    client, _ = tg
+    items = media_ids(client, kinds="image")["items"]
+    photo_id, document_id = items[0]["id"], items[1]["id"]
+    with database.session_factory()() as db:
+        db.get(models.TgMedia, document_id).file_name = "ref.png"
+        db.commit()
+    started = import_into(client, [photo_id, document_id], entity_id=shot(client)["id"])
+    await wait_job(client, started["job_id"])
+    with database.session_factory()() as db:
+        photo_file = db.get(models.File, db.get(models.TgMedia, photo_id).imported_file_id)
+        document_file = db.get(models.File, db.get(models.TgMedia, document_id).imported_file_id)
+        assert photo_file.no_compress is True
+        assert document_file.no_compress is False and document_file.original_name == "ref.png"
+
+
 async def test_importing_to_the_same_card_twice_is_harmless(tg):
     client, _ = tg
     one = media_ids(client)["items"][-1]["id"]

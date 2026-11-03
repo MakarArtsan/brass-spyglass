@@ -47,6 +47,7 @@ def used_bytes(settings: Settings, *, fresh: bool = False) -> int:
         return cached[1]
     folders = (
         settings.files_dir,
+        settings.originals_dir,
         settings.cache_dir,
         settings.exports_dir,
         settings.backups_dir,

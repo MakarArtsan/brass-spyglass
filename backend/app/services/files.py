@@ -46,6 +46,18 @@ EXT_ALIASES = {"jfif": "jpg", "jpe": "jpg"}
 ALIAS_MIME = {"jpg": "image/jpeg"}
 
 
+MIME_BY_EXT = {
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "png": "image/png",
+    "heic": "image/heic",
+    "heif": "image/heif",
+    "bmp": "image/bmp",
+    "tif": "image/tiff",
+    "tiff": "image/tiff",
+}
+
+
 def extension(name: str) -> str:
     match = re.search(r"\.([A-Za-z0-9]{1,8})$", name.strip())
     return match.group(1).lower() if match else ""
@@ -88,6 +100,7 @@ def store_upload(
     files_dir: Path,
     source: FileSource = FileSource.UPLOAD,
     extra: dict[str, Any] | None = None,
+    compress: bool = True,
 ) -> models.File:
     """Создаёт запись файла (автор и время — от сервера, из сессии), переносит загруженное на
     постоянный диск и ставит задачу на превью. Оригинал дальше не меняется."""
@@ -108,6 +121,7 @@ def store_upload(
             "mime": mime,
             "size_bytes": size_bytes,
             "sha256": sha256,
+            "no_compress": not compress,
             **(extra or {}),
         },
         project_id=project_id,

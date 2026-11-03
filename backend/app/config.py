@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     # Кэш просмотра не скачанных файлов Telegram: старые файлы удаляются, когда кэш больше этого.
     tg_preview_cache_mb: int = 500
     membership_recheck_hours: int = 24
+    # Сжатие картинок при загрузке. Выключатель на случай сбоя; пути к кодировщикам — для тестов.
+    compress_images: bool = True
+    pngquant_bin: str = "pngquant"
+    cjpeg_bin: str = "/opt/mozjpeg/bin/cjpeg"  # mozjpeg собирается в Dockerfile
+    originals_keep_days: int = 7  # сколько лежит оригинал до сжатия
 
     @field_validator("tg_session", mode="before")
     @classmethod
@@ -76,6 +81,10 @@ class Settings(BaseSettings):
         return self.data_dir / "cache"
 
     @property
+    def originals_dir(self) -> Path:
+        return self.data_dir / "originals"
+
+    @property
     def exports_dir(self) -> Path:
         return self.data_dir / "exports"
 
@@ -91,6 +100,7 @@ class Settings(BaseSettings):
         for path in (
             self.db_path.parent,
             self.files_dir,
+            self.originals_dir,
             self.cache_dir,
             self.exports_dir,
             self.backups_dir,

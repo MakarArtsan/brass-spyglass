@@ -340,6 +340,8 @@ def import_downloaded(
         sha256=sha256,
         files_dir=files_dir,
         source=FileSource.TELEGRAM,
+        # Фото Telegram уже пережал сам (у них нет имени файла), документ — жмём как обычный.
+        compress=not (media.kind == "image" and not media.file_name),
         extra={
             "tg_chat_id": media.chat_id,
             "tg_topic_id": media.topic_id,

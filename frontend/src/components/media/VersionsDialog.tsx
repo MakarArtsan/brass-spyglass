@@ -3,7 +3,7 @@ import { Upload, X } from 'lucide-react'
 import { useRef } from 'react'
 import { Avatar } from '@/components/Avatar'
 import { Button } from '@/components/ui/button'
-import { ACCEPT, useUploads } from '@/components/Uploads'
+import { ACCEPT, NoCompressToggle, useUploads } from '@/components/Uploads'
 import { usePerms } from '@/hooks/usePerms'
 import { ApiError } from '@/lib/api'
 import { displayName } from '@/lib/files'
@@ -80,12 +80,13 @@ export default function VersionsDialog({ file, onClose }: Props) {
           </ol>
 
           {perms.canUpload && (
-            <div className="mt-5">
+            <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-1">
               <input ref={input} type="file" accept={ACCEPT} className="sr-only" onChange={pick} aria-label={ru.files.newVersion} tabIndex={-1} />
               <Button onClick={() => input.current?.click()}>
                 <Upload size={16} aria-hidden />
                 {ru.files.newVersion}
               </Button>
+              <NoCompressToggle />
             </div>
           )}
         </Dialog.Content>

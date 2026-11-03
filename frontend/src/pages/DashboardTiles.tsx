@@ -1,7 +1,7 @@
 import { ActivityTile } from '@/components/dashboard/Activity'
 import { BurndownTile } from '@/components/dashboard/Burndown'
 import { Readiness, RuntimeGauge, SeedanceGauge } from '@/components/dashboard/Gauges'
-import { AlertsTile, ContributionTile, FeedTile, MediaTile, MyTasksTile } from '@/components/dashboard/Lists'
+import { AlertsTile, ContributionTile, FeedTile, MediaTile, MyTasksTile, SavedTile } from '@/components/dashboard/Lists'
 import { Deferred } from '@/components/dashboard/primitives'
 import { DrumCurve, FilmStrip } from '@/components/dashboard/Strip'
 import { useMe } from '@/hooks/useAuth'
@@ -42,9 +42,12 @@ export default function DashboardTiles() {
                 <SeedanceGauge data={dash.seedance} />
               </Deferred>
             </div>
-            <div className="lg:col-span-4">
+            <div className="space-y-4 lg:col-span-4">
               <Deferred title={ru.dash.media} minHeight={290}>
                 <MediaTile data={dash.media} />
+              </Deferred>
+              <Deferred title={ru.dash.saved} minHeight={110}>
+                <SavedTile data={dash.media} />
               </Deferred>
             </div>
             <div className="lg:col-span-7">

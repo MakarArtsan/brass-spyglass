@@ -5,7 +5,7 @@ import { Avatar } from '@/components/Avatar'
 import { Lens } from '@/components/Lens'
 import { useUsers } from '@/hooks/useAuth'
 import { displayName } from '@/lib/files'
-import { formatDate } from '@/lib/format'
+import { formatDate, formatSize } from '@/lib/format'
 import { useLibrary, type LibraryFilter } from '@/lib/queries'
 import type { LibraryItem } from '@/lib/types'
 import { cn } from '@/lib/utils'
@@ -98,6 +98,7 @@ export function LibraryView({ mode, selected, onPick, onOpen }: Props) {
   const query = useLibrary(filter)
   const items = query.data?.pages.flatMap((p) => p.items) ?? []
   const total = query.data?.pages[0]?.total ?? 0
+  const saved = query.data?.pages[0]?.compression.saved_bytes ?? 0
   const [view, setView] = useState<'grid' | 'list'>(() => {
     try {
       return localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'grid'
@@ -206,7 +207,10 @@ export function LibraryView({ mode, selected, onPick, onOpen }: Props) {
             {ru.library.reset}
           </button>
         )}
-        <span className="mono ml-auto pb-3 text-fog" role="status">{query.isSuccess ? ru.library.total(total) : ''}</span>
+        <span className="mono ml-auto pb-3 text-fog" role="status">
+          {query.isSuccess ? ru.library.total(total) : ''}
+          {query.isSuccess && mode === 'page' && saved > 0 && ` · ${ru.library.saved(formatSize(saved))}`}
+        </span>
       </div>
 
       {query.isPending && <p className="py-8 text-center text-fog" role="status">{ru.library.loading}</p>}

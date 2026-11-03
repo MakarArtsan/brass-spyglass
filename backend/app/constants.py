@@ -182,6 +182,14 @@ class FileKind(StrEnum):
     LINK = "link"
 
 
+class CompressState(StrEnum):
+    """Что стало с картинкой после сжатия (пусто — ещё не обрабатывалась или не подлежит сжатию)."""
+
+    DONE = "done"  # файл подменён сжатым, оригинал лежит 7 дней
+    SMALL_GAIN = "small_gain"  # выигрыш меньше 10%: оставили оригинал
+    FAILED = "failed"  # сжать не получилось: файл остался как был
+
+
 class FileSource(StrEnum):
     UPLOAD = "upload"
     TELEGRAM = "telegram"
@@ -208,6 +216,7 @@ class JobType(StrEnum):
     TG_IMPORT = "tg_import"
     EXPORT = "export"
     BACKUP = "backup"
+    COMPRESS = "compress"
 
 
 class NotificationKind(StrEnum):

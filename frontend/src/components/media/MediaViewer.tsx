@@ -1,7 +1,8 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { ChevronLeft, ChevronRight, Download, ExternalLink, FileText, X } from 'lucide-react'
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AudioPlayer } from '@/components/media/AudioPlayer'
+import { CompressionNote } from '@/components/media/CompressionNote'
 import { ImageZoom } from '@/components/media/ImageZoom'
 import { VideoPlayer } from '@/components/media/VideoPlayer'
 import { Avatar } from '@/components/Avatar'
@@ -91,7 +92,10 @@ interface Props {
  * экран со свайпом между файлами. Видео, фото, аудио и PDF проигрываются прямо на сайте.
  */
 export function MediaViewer({ files, index, onIndex, onClose }: Props) {
-  const file = files[index]
+  // Окно держит снимок списка: файл, у которого что-то изменилось здесь (вернули оригинал), подменяем.
+  const [fresh, setFresh] = useState<Record<number, FileItem>>({})
+  const current = files[index]
+  const file = current ? (fresh[current.id] ?? current) : current
   const go = useCallback(
     (direction: 1 | -1) => onIndex((index + direction + files.length) % files.length),
     [index, files.length, onIndex],
@@ -121,6 +125,7 @@ export function MediaViewer({ files, index, onIndex, onClose }: Props) {
             <div className="min-w-0 flex-1">
               <Dialog.Title className="truncate font-sans text-sm font-semibold">{file.original_name ?? ru.viewer.title}</Dialog.Title>
               <Meta file={file} />
+              <CompressionNote file={file} onUpdated={(updated) => setFresh((cur) => ({ ...cur, [updated.id]: { ...file, ...updated } }))} />
             </div>
             {files.length > 1 && (
               <span className="mono text-xs text-fog" aria-label={`${index + 1} / ${files.length}`}>
