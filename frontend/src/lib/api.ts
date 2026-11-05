@@ -89,6 +89,8 @@ export interface ProjectBrief {
   title_en: string
   role: User['role']
   archived: boolean
+  /** Ждёт подтверждения суперадмина: пока его нет, команда не загружает файлы. */
+  pending?: boolean
 }
 
 /** Кто вошёл и какие проекты ему открыты (вне проекта). */
@@ -98,6 +100,18 @@ export interface SessionInfo {
   projects: ProjectBrief[]
   /** Можно ли этому человеку создать свой проект (самообслуживание включено и предел не исчерпан). */
   can_create_projects: boolean
+  /** Сколько заявок на проекты ждёт решения (только у суперадмина). */
+  pending_count?: number
+}
+
+/** Заявка на проект, которую решает суперадмин. */
+export interface ProjectRequest {
+  slug: string
+  title: string
+  title_en: string
+  created_at: string
+  owner_name: string | null
+  owner_username: string | null
 }
 
 /** Группа Telegram, которой человек может распоряжаться: в ней есть и юзербот, и он (администратор). */
@@ -123,6 +137,8 @@ export interface NewProjectBody {
 export interface Project {
   id: number
   slug: string
+  /** Подтверждён суперадмином; иначе команда не загружает файлы. */
+  approved: boolean
   title: string
   title_en: string
   contest: string

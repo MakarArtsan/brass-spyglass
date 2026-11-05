@@ -10,6 +10,7 @@ import { currentSlug } from '@/lib/project'
 import Login from '@/pages/Login'
 import ProjectMissing from '@/pages/ProjectMissing'
 import NewProject from '@/pages/NewProject'
+import ProjectRequests from '@/pages/ProjectRequests'
 import ProjectRedirect from '@/pages/ProjectRedirect'
 import NotFound from '@/pages/NotFound'
 import Placeholder from '@/pages/Placeholder'
@@ -103,6 +104,7 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/new-project" element={<NewProject />} />
+          <Route path="/requests" element={<ProjectRequests />} />
           <Route path="/*" element={<ProjectRedirect />} />
         </Routes>
       )}

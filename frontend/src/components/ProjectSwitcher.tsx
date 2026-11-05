@@ -11,7 +11,8 @@ export function ProjectSwitcher() {
   const { data } = useQuery({ queryKey: sessionKey, queryFn: () => api<SessionInfo>('/session'), staleTime: 60_000 })
   const projects = data?.projects ?? []
   const canCreate = data?.can_create_projects === true
-  if (projects.length < 2 && !canCreate) return null
+  const requests = data?.pending_count ?? 0
+  if (projects.length < 2 && !canCreate && requests === 0) return null
   return (
     <>
       {projects.length >= 2 && (
@@ -26,10 +27,20 @@ export function ProjectSwitcher() {
               <option key={p.slug} value={p.slug}>
                 {p.title}
                 {p.archived ? ` (${ru.projects.archived})` : ''}
+                {p.pending ? ` (${ru.approval.badge})` : ''}
               </option>
             ))}
           </select>
         </label>
+      )}
+      {requests > 0 && (
+        <a
+          href="/requests"
+          className="mx-3 mt-3 flex min-h-touch items-center justify-between gap-2 rounded-lg border border-brass/50 px-3 text-sm text-paper transition-colors duration-fast hover:border-brass"
+        >
+          {ru.approval.linkLabel}
+          <span className="mono rounded-full bg-brass px-2 py-0.5 text-xs font-semibold text-on-brass">{requests}</span>
+        </a>
       )}
       {canCreate && (
         <a

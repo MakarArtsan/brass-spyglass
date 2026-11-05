@@ -3,6 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom'
 import { BottomNav } from '@/components/BottomNav'
 import { ContestBadge } from '@/components/ContestBadge'
 import { Header } from '@/components/Header'
+import { PendingBanner } from '@/components/PendingBanner'
 import { Sidebar } from '@/components/Sidebar'
 import { TgJobs } from '@/components/telegram/TgJobs'
 import { Toaster } from '@/components/Toast'
@@ -26,6 +27,7 @@ export function AppShell({ me }: { me: Me }) {
       <Sidebar user={me.user} abilities={me.abilities} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Header project={project} />
+        {project?.approved === false && <PendingBanner project={project} />}
         <main id="main" className="min-h-dvh flex-1 px-4 py-6 lg:px-8 lg:pb-10">
           {/* Плавное появление только при переходах: первый показ страницы идёт без анимации. */}
           <div key={location.pathname} className={location.key === 'default' ? undefined : 'motion-safe:animate-page-in'}>
