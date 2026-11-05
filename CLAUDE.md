@@ -99,7 +99,8 @@ frontend/src/
   components/               StatusPill, CardPanel, Comments, Uploads, … ; media/ — плееры и медиатека;
                             dashboard/ — виджеты на SVG; telegram/ — окно импорта и прогресс
   pages/                    Shots, Scenes, Assets, Setups, Sound, Tasks, Media, Telegram, Journal, Dashboard
-                            (+ DashboardTiles — ленивый чанк графиков), Animatic, Export
+                            (+ DashboardTiles — ленивый чанк графиков), Animatic, Export; вне проекта: Login,
+                            ProjectRedirect (выбор проекта), NewProject (свой проект: чат → название → срок)
 frontend/e2e/               Playwright (desktop 1440 + phone 390); fixtures.ts, screenshots.mjs
 ```
 

@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { api, ApiError, type SessionInfo } from '@/lib/api'
 import { lastProject, rememberProject } from '@/lib/project'
+import { Button } from '@/components/ui/button'
 import { sessionKey, useLogout } from '@/hooks/useAuth'
 import { ru } from '@/ru'
 
@@ -33,10 +34,19 @@ export default function ProjectRedirect() {
     return (
       <div role="status" className="flex min-h-dvh flex-col items-center justify-center gap-4 px-6 text-center">
         <h1 className="font-display text-3xl">{ru.projects.noneTitle}</h1>
-        <p className="max-w-md text-fog">{ru.projects.noneLead}</p>
-        <button type="button" onClick={() => logout.mutate()} className="min-h-touch rounded-lg border border-line px-4">
-          {ru.projects.logout}
-        </button>
+        <p className="max-w-md text-fog">
+          {session.data?.can_create_projects ? ru.projects.noneLeadCanCreate : ru.projects.noneLead}
+        </p>
+        <div className="flex flex-wrap justify-center gap-3">
+          {session.data?.can_create_projects && (
+            <Button asChild size="lg">
+              <a href="/new-project">{ru.projects.create}</a>
+            </Button>
+          )}
+          <button type="button" onClick={() => logout.mutate()} className="min-h-touch rounded-lg border border-line px-4">
+            {ru.projects.logout}
+          </button>
+        </div>
       </div>
     )
   }

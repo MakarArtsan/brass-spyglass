@@ -96,6 +96,28 @@ export interface SessionInfo {
   user: User
   is_superadmin: boolean
   projects: ProjectBrief[]
+  /** Можно ли этому человеку создать свой проект (самообслуживание включено и предел не исчерпан). */
+  can_create_projects: boolean
+}
+
+/** Группа Telegram, которой человек может распоряжаться: в ней есть и юзербот, и он (администратор). */
+export interface AvailableChat {
+  id: number
+  title: string
+}
+
+export interface AvailableChats {
+  ready: boolean
+  userbot: { username: string | null; name: string | null } | null
+  chats: AvailableChat[]
+  message: string | null
+}
+
+export interface NewProjectBody {
+  title: string
+  title_en?: string
+  deadline?: string
+  chat_id: number | null
 }
 
 export interface Project {
