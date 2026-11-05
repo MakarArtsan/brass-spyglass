@@ -12,7 +12,7 @@ from sqlalchemy import select
 from app import db as database
 from app import models
 from app.auth import flow, session
-from app.auth.membership import MembershipUnavailable
+from app.auth.membership import ChatInfo, MembershipUnavailable
 from app.auth.tokens import LoginTokenStore
 from app.config import get_settings
 from tests.conftest import OWNER_TG_ID
@@ -37,7 +37,11 @@ class FakeMembership:
         down: bool = False,
         chats: dict[int, set[int]] | None = None,
         broken: set[int] | None = None,
+        admins: dict[int, set[int]] | None = None,
+        titles: dict[int, str] | None = None,
     ) -> None:
+        self.admins = admins or {}  # чат → администраторы (юзербот в таких чатах есть)
+        self.titles = titles or {}
         self.members = members or set()
         self.chats = chats or {}
         self.broken = broken or set()
@@ -66,6 +70,24 @@ class FakeMembership:
 
     def forget(self, chat_id: int) -> None:
         self.forgotten.append(chat_id)
+
+    async def manageable_chats(self, tg_id: int, exclude) -> list[ChatInfo]:
+        if self.down:
+            raise MembershipUnavailable("нет связи")
+        return [
+            ChatInfo(chat, self.titles.get(chat, f"Чат {chat}"))
+            for chat, admins in self.admins.items()
+            if tg_id in admins and chat not in set(exclude)
+        ]
+
+    async def chat_for(self, tg_id: int, chat_id: int, *, require_admin: bool = True):
+        if self.down:
+            raise MembershipUnavailable("нет связи")
+        if chat_id not in self.admins:
+            return None  # юзербота в этом чате нет
+        if require_admin and tg_id not in self.admins[chat_id]:
+            return None
+        return ChatInfo(chat_id, self.titles.get(chat_id, f"Чат {chat_id}"))
 
 
 # --- токены ---------------------------------------------------------------------------------

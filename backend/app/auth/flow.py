@@ -60,15 +60,20 @@ def _confirmed_recently(tg_id: int, settings: Settings) -> bool:
 
 
 async def _decide(tg_id: int, membership: MembershipChecker, settings: Settings) -> Decision:
-    """Входить может суперадмин (всегда: сайт доступен ещё до подключения юзербота) и тот, кто
-    состоит в чате хотя бы одного проекта. Telegram не отвечает — по последней проверке не старше
-    `members_fallback_hours`: сбой связи не должен выбрасывать команду с сайта."""
+    """Входить может суперадмин (всегда: сайт доступен ещё до подключения юзербота).
+
+    С самообслуживанием (по умолчанию) — любой пользователь Telegram: проектов у него может не
+    быть, он создаст свой, а чаты проектов лишь привязывают его к уже существующим. Без него —
+    только тот, кто состоит в чате хотя бы одного проекта; Telegram не отвечает — по последней
+    проверке не старше `members_fallback_hours`: сбой связи не выбрасывает команду с сайта."""
     superadmin = settings.is_superadmin(tg_id)
     chat_ids = await asyncio.to_thread(_project_chats)
     try:
         chats = await membership.chats_of(tg_id, chat_ids)
     except MembershipUnavailable:
         chats = None
+    if settings.self_service_projects:
+        return Decision(LoginOutcome.OK, chats)
     if chats is not None:
         if superadmin or any(chats.values()):
             return Decision(LoginOutcome.OK, chats)

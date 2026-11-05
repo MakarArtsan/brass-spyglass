@@ -101,6 +101,8 @@ async def start(service):
 async def test_a_good_session_connects_and_leaves_no_error(service):
     await start(service)
     assert service.userbot is not None and service.userbot_error is None
+    # кого добавлять в чат нового проекта: имя и @username показываются на экране создания
+    assert service.userbot_account == {"username": "brass_bot", "name": None}
 
 
 async def test_an_unauthorized_session_is_reported_and_not_kept(service):

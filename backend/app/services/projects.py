@@ -1,15 +1,18 @@
 """Проекты: у каждого адрес `/p/<slug>` и свой закрытый чат команды."""
 
 import re
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import models, permissions, scope
 from app.config import Settings, get_settings
-from app.permissions import Actor
-from app.services.core import log_activity
+from app.constants import Role
+from app.permissions import Actor, PermissionDenied
+from app.services import members
+from app.services.core import ConflictError, ValidationError, log_activity
 
 # Дубай: UTC+4 круглый год, без перехода на летнее время, поэтому tzdata не нужен.
 DUBAI = timezone(timedelta(hours=4))
@@ -39,9 +42,18 @@ def get_project(db: Session) -> models.Project | None:
     return db.scalar(select(models.Project).order_by(models.Project.id).limit(1))
 
 
+_TRANSLIT = {
+    "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ё": "e", "ж": "zh", "з": "z",
+    "и": "i", "й": "y", "к": "k", "л": "l", "м": "m", "н": "n", "о": "o", "п": "p", "р": "r",
+    "с": "s", "т": "t", "у": "u", "ф": "f", "х": "kh", "ц": "ts", "ч": "ch", "ш": "sh",
+    "щ": "shch", "ъ": "", "ы": "y", "ь": "", "э": "e", "ю": "yu", "я": "ya",
+}  # fmt: skip
+
+
 def slugify(text: str, fallback: str = "project") -> str:
-    """Адрес из названия: латиница, цифры и дефисы; пусто — запасное имя."""
-    base = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:60]
+    """Адрес из названия: латиница, цифры и дефисы (кириллица транслитом); пусто — запасное имя."""
+    latin = "".join(_TRANSLIT.get(ch, ch) for ch in text.lower())
+    base = re.sub(r"[^a-z0-9]+", "-", latin).strip("-")[:60].strip("-")
     return base or fallback
 
 
@@ -106,4 +118,100 @@ def ensure_default_project(db: Session, settings: Settings | None = None) -> mod
     if chat is not None and project.tg_chat_id is None and get_by_chat(db, chat) is None:
         project.tg_chat_id = chat
         db.flush()
+    return project
+
+
+MOSCOW = timezone(timedelta(hours=3))
+DEFAULT_DEADLINE_DAYS = 60
+NOT_A_CONTEST = "—"  # у своего проекта конкурса нет; поле показывается на дашборде
+
+
+def owned_count(db: Session, user: models.User) -> int:
+    """В скольких живых проектах человек владелец (лимит на создание своих проектов)."""
+    return (
+        db.scalar(
+            select(func.count())
+            .select_from(models.ProjectMember)
+            .join(models.Project, models.Project.id == models.ProjectMember.project_id)
+            .where(
+                models.ProjectMember.user_id == user.id,
+                models.ProjectMember.active.is_(True),
+                models.ProjectMember.role == Role.OWNER.value,
+                models.Project.archived_at.is_(None),
+            )
+        )
+        or 0
+    )
+
+
+def can_create(db: Session, user: models.User, settings: Settings | None = None) -> bool:
+    """Суперадмин создаёт без ограничений. Остальные — если включено самообслуживание и они ещё не
+    владеют предельным числом проектов (`MAX_PROJECTS_PER_USER`)."""
+    settings = settings or get_settings()
+    if settings.is_superadmin(user.tg_id):
+        return True
+    return settings.self_service_projects and owned_count(db, user) < settings.max_projects_per_user
+
+
+def create(
+    db: Session,
+    user: models.User,
+    *,
+    title: str,
+    title_en: str | None = None,
+    deadline: date | None = None,
+    chat_id: int | None = None,
+    settings: Settings | None = None,
+    now: datetime | None = None,
+) -> models.Project:
+    """Новый проект: создатель — его владелец. Чат проверяет вызывающий (через юзербота):
+    сюда он приходит уже проверенным, а без чата проект создаёт только суперадмин.
+
+    Срок сдачи по умолчанию — через 60 дней; внутренний срок — за два дня до него. Формат кадра и
+    целевой хронометраж берутся из значений по умолчанию; лимит места — `NEW_PROJECT_STORAGE_GB`.
+    """
+    settings = settings or get_settings()
+    now = now or datetime.now(UTC)
+    if not can_create(db, user, settings):
+        raise PermissionDenied(
+            "Создать ещё один проект нельзя: достигнут предел или функция выключена"
+        )
+    title = title.strip()
+    if not title:
+        raise ValidationError("Назовите проект")
+    if chat_id is None and not settings.is_superadmin(user.tg_id):
+        raise ValidationError("Привяжите закрытый чат команды: проект живёт в чате Telegram")
+    if chat_id is not None and get_by_chat(db, chat_id) is not None:
+        raise ConflictError("Этот чат уже привязан к другому проекту")
+    if deadline is not None and deadline < now.astimezone(MOSCOW).date():
+        raise ValidationError("Срок сдачи уже прошёл")
+    due = deadline or (now.astimezone(MOSCOW) + timedelta(days=DEFAULT_DEADLINE_DAYS)).date()
+    official = datetime(due.year, due.month, due.day, 23, 59, 59, tzinfo=MOSCOW).astimezone(UTC)
+    internal = official - timedelta(days=2)
+    if internal <= now:
+        internal = official  # срок близко: внутреннего «раньше» уже нет
+    english = (title_en or "").strip() or title
+    project = models.Project(
+        **{
+            **DEFAULT_PROJECT,
+            "slug": unique_slug(db, slugify(english, fallback=slugify(title))),
+            "title": title,
+            "title_en": english,
+            "contest": NOT_A_CONTEST,
+            "deadline_official": official,
+            "deadline_internal": internal,
+            "storage_limit_gb": settings.new_project_storage_gb,
+            "tg_chat_id": chat_id,
+        }
+    )
+    db.add(project)
+    try:
+        db.flush()
+    except IntegrityError as exc:  # два запроса на один чат одновременно: выигрывает один
+        db.rollback()
+        raise ConflictError("Этот чат уже привязан к другому проекту") from exc
+    members.ensure(db, project, user, role=Role.OWNER, settings=settings)
+    log_activity(
+        db, user.id, "create", "project", project.id, {"chat_id": chat_id}, project_id=project.id
+    )
     return project

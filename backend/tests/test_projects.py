@@ -42,7 +42,10 @@ def test_the_chat_is_not_taken_from_another_project_or_overwritten(db, monkeypat
     [
         ("The Brass Spyglass", "the-brass-spyglass"),
         ("  Hello, World!  ", "hello-world"),
-        ("Битва при кривом зеркале", "project"),  # нет латиницы — запасное имя
+        ("Битва при кривом зеркале", "bitva-pri-krivom-zerkale"),  # кириллица — транслитом
+        ("Щётка и ёж", "shchetka-i-ezh"),
+        ("电影", "project"),  # нет ни латиницы, ни кириллицы — запасное имя
+        ("!!!", "project"),
         ("", "project"),
     ],
 )

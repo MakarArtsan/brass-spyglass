@@ -68,6 +68,7 @@ def session_info(
         user=_user_out(user),
         is_superadmin=get_settings().is_superadmin(user.tg_id),
         projects=my_projects(db, user),
+        can_create_projects=projects.can_create(db, user),
     )
 
 

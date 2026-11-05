@@ -97,6 +97,7 @@ class TelegramService:
         self.bot_username: str = settings.tg_bot_username.lstrip("@")
         self._sync_task: asyncio.Task[None] | None = None
         self._event_tasks: dict[int, asyncio.Task[None]] = {}
+        self.userbot_account: dict[str, str | None] | None = None  # кого добавлять в чат проекта
         self.sync_pause_sec = 1.0  # между чатами: не упираться во FloodWait
         self.event_debounce_sec = EVENT_DEBOUNCE_SEC
         self.userbot_error: str | None = None  # почему юзербот не подключён (для экрана «Telegram»)
@@ -149,6 +150,7 @@ class TelegramService:
                     log.error("сессия юзербота недействительна (TG_SESSION)")
                     return
                 self.userbot = client
+                self.userbot_account = await self._account_of(client)
                 self.membership = TelethonMembership(client)
                 client.add_event_handler(self._on_chat_action, events.ChatAction)
                 self.userbot_error = None
@@ -166,6 +168,19 @@ class TelegramService:
                     log.debug("подробности", exc_info=True)
                     return
                 await asyncio.sleep(CONNECT_PAUSE_SEC * attempt)
+
+    @staticmethod
+    async def _account_of(client: TelegramClient) -> dict[str, str | None] | None:
+        """Имя и @username юзербота: человек должен знать, кого добавить в чат своего проекта."""
+        try:
+            me = await client.get_me()
+        except Exception:
+            log.warning("не удалось узнать аккаунт юзербота", exc_info=True)
+            return None
+        name = " ".join(
+            p for p in (getattr(me, "first_name", None), getattr(me, "last_name", None)) if p
+        )
+        return {"username": getattr(me, "username", None), "name": name or None}
 
     async def stop(self) -> None:
         tasks = [t for t in (self._sync_task, *self._event_tasks.values()) if t is not None]
@@ -253,6 +268,10 @@ class TelegramService:
         await asyncio.to_thread(self._revoke_orphans)
         return ok
 
+    async def sync_project(self, project_id: int, chat_id: int) -> bool:
+        """Прочитать чат нового проекта сразу, не дожидаясь планового срока."""
+        return await self._sync_chat(project_id, chat_id)
+
     async def _sync_chat(self, project_id: int, chat_id: int) -> bool:
         try:
             ids = await self.membership.participants(chat_id)
@@ -319,6 +338,8 @@ class TelegramService:
             return result
 
     def _revoke_orphans(self) -> int:
+        if self.settings.self_service_projects:
+            return 0  # войти может любой, а без проектов человек просто видит пустой экран
         with database.session_factory()() as session:
             closed = users.revoke_orphans(session, self.settings)
             session.commit()

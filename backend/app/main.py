@@ -21,6 +21,7 @@ from app.api import events as events_api
 from app.api import exports as exports_api
 from app.api import files as files_api
 from app.api import notifications as notifications_api
+from app.api import projects as projects_api
 from app.api import telegram as telegram_api
 from app.auth.telegram import TelegramService
 from app.auth.tokens import LoginTokenStore
@@ -102,6 +103,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.tg = TelegramService(settings, app.state.tokens)
     await app.state.tg.start()
     pool = await _start_indexers(app, settings)
+    app.state.indexer_pool = pool  # новому проекту индексатор запускается на лету
     backup.loop = asyncio.get_running_loop()
     backup.sender = app.state.tg.send_to_owner if app.state.tg.bot is not None else None
     maintenance = Maintenance(settings, app.state.jobs.wake)
@@ -125,8 +127,6 @@ async def _start_indexers(app: FastAPI, settings: Settings) -> IndexerPool | Non
         return None
     with database.session_factory()() as db:
         chats = [c for c in db.scalars(select(models.Project.tg_chat_id)) if c is not None]
-    if not chats:
-        return None
     pool = IndexerPool(userbot, database.session_factory(), settings)
     await pool.start(chats)
     return pool
@@ -156,6 +156,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router, prefix="/api")
     app.include_router(auth_api.router, prefix="/api")
     app.include_router(me.router, prefix="/api")
+    app.include_router(projects_api.router, prefix="/api")
     # Внутри проекта: `/api/p/<slug>/…`. Общий обработчик проверяет членство и выбирает проект,
     # после чего запросы к данным проекта фильтруются сами (`scope.py`); чужое и нет проекта — 404.
     inside = {"prefix": "/api/p/{slug}", "dependencies": [Depends(access.project_access)]}
