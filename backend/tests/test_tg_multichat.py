@@ -1,6 +1,7 @@
 """Два проекта — два чата: у каждого свой шлюз и индексатор; данные, просмотр и загрузки не смешиваются."""
 
 import asyncio
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import select
@@ -28,7 +29,13 @@ async def two(tg):  # noqa: F811
     client, gateway_a = tg
     with database.session_factory()() as db:
         second = models.Project(
-            **{**projects.DEFAULT_PROJECT, "slug": B, "title": "Второй", "tg_chat_id": CHAT_B}
+            **{
+                **projects.DEFAULT_PROJECT,
+                "slug": B,
+                "title": "Второй",
+                "tg_chat_id": CHAT_B,
+                "approved_at": datetime.now(UTC),
+            }
         )
         db.add(second)
         db.flush()

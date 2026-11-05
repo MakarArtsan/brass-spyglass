@@ -13,7 +13,7 @@ from sqlalchemy import select
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from app import backup, events, models, uploads
+from app import approvals, backup, events, models, uploads
 from app import db as database
 from app.api import access, animatic, dashboard, entities, health, me
 from app.api import auth as auth_api
@@ -101,6 +101,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     app.state.tokens = LoginTokenStore(settings.login_token_ttl_sec)
     app.state.tg = TelegramService(settings, app.state.tokens)
+    app.state.tg.on_decision = lambda action, project_id, user_id: approvals.decide(
+        app,
+        action,
+        project_id,
+        user_id,  # type: ignore[arg-type]
+    )
     await app.state.tg.start()
     pool = await _start_indexers(app, settings)
     app.state.indexer_pool = pool  # новому проекту индексатор запускается на лету
@@ -126,7 +132,15 @@ async def _start_indexers(app: FastAPI, settings: Settings) -> IndexerPool | Non
     if userbot is None:
         return None
     with database.session_factory()() as db:
-        chats = [c for c in db.scalars(select(models.Project.tg_chat_id)) if c is not None]
+        chats = [
+            c
+            for c in db.scalars(
+                select(models.Project.tg_chat_id).where(
+                    models.Project.approved_at.is_not(None), models.Project.archived_at.is_(None)
+                )
+            )
+            if c is not None
+        ]  # чат неподтверждённого проекта не индексируем: сбор медиа — тоже «загрузка»
     pool = IndexerPool(userbot, database.session_factory(), settings)
     await pool.start(chats)
     return pool

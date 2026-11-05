@@ -44,6 +44,7 @@ def tg(bound_chat, client, monkeypatch):
     """Приложение с подключённым (подставным) юзерботом. `bound_chat` закрывает самообслуживание
     для старых тестов, здесь оно нужно включённым, как в рабочей конфигурации."""
     monkeypatch.setenv("SELF_SERVICE_PROJECTS", "true")
+    monkeypatch.setenv("PROJECT_APPROVAL", "false")  # подтверждение проверяют тесты шлюза
     get_settings.cache_clear()
     state = client.app.state
     state.tg.userbot = FakeClient()
@@ -220,6 +221,7 @@ def test_a_newcomer_creates_a_project_in_their_chat_and_owns_it(tg):
         "title_en": "Crooked Mirror",
         "role": "owner",
         "archived": False,
+        "pending": False,
     }
     assert tg.app.state.indexer_pool.ensured == [C1]  # индексатор чата запущен сразу
 

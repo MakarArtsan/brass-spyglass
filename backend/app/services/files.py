@@ -188,7 +188,7 @@ def add_link(
     """
     from app.services import links  # отложенный импорт: links сам использует этот модуль
 
-    permissions.require(permissions.can_upload(actor))
+    permissions.require_upload(actor)
     try:
         normalized = linkpreview.parse_url(url).geturl()
     except linkpreview.LinkError as exc:

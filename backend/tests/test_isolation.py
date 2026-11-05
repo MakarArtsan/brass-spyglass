@@ -6,6 +6,7 @@
 """
 
 import re
+from datetime import UTC, datetime
 from itertools import count
 
 import pytest
@@ -59,6 +60,7 @@ def world(seeded_client):
         second = models.Project(
             **{
                 **projects.DEFAULT_PROJECT,
+                "approved_at": datetime.now(UTC),  # неподтверждённому проекту нельзя загружать
                 "slug": B,
                 "title": "Второй фильм",
                 "tg_chat_id": -100222,

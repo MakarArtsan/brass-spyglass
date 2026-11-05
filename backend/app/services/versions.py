@@ -102,7 +102,7 @@ def new_version(
     compress: bool = True,
 ) -> models.File:
     """Сохраняет загруженное как следующую версию файла. Автор и время — от сервера."""
-    permissions.require(permissions.can_upload(actor), "Гость не загружает файлы")
+    permissions.require_upload(actor, "Гость не загружает файлы")
     base = core.get(db, EntityType.FILE, base_file_id)
     assert isinstance(base, models.File)
     if base.kind == FileKind.LINK.value:
@@ -152,7 +152,7 @@ def new_version(
 
 def rollback(db: Session, actor: Actor, file_id: int) -> models.File:
     """Делает выбранную версию текущей. Прошлая текущая остаётся в истории (откат обратим)."""
-    permissions.require(permissions.can_upload(actor), "Гость не меняет версии")
+    permissions.require_upload(actor, "Гость не меняет версии")
     file = core.get(db, EntityType.FILE, file_id)
     assert isinstance(file, models.File)
     if file.version_group_id is None:

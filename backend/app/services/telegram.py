@@ -200,7 +200,7 @@ def queue_import(
     purpose: str,
 ) -> models.Job:
     """Ставит задачу `tg_import`: скачать оригиналы, сделать превью, привязать к карточке."""
-    permissions.require(permissions.can_upload(actor), "Гость не загружает файлы")
+    permissions.require_upload(actor, "Гость не загружает файлы")
     ids = list(dict.fromkeys(media_ids))  # без повторов, порядок сохраняется
     if not ids:
         raise core.ValidationError("Не выбрано ни одного файла")
@@ -229,7 +229,7 @@ def queue_import(
 
 def queue_preview(db: Session, actor: Actor, media_id: int) -> models.Job:
     """Просмотр не скачанного файла прямо в окне: качаем во временный кэш, не в проект."""
-    permissions.require(permissions.can_upload(actor), "Гость не смотрит чат")
+    permissions.require_upload(actor, "Гость не смотрит чат")
     get_media(db, media_id)
     return jobs.enqueue(db, JobType.TG_IMPORT, {"preview": media_id}, actor.id)
 
