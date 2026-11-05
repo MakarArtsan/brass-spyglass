@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, StringConstraints
@@ -50,6 +50,7 @@ class SessionOut(BaseModel):
     user: UserOut
     is_superadmin: bool
     projects: list[ProjectBrief]
+    can_create_projects: bool = False
 
 
 class ProjectOut(BaseModel):
@@ -82,6 +83,36 @@ class ProjectRename(BaseModel):
 
     title: ProjectTitle | None = None
     title_en: ProjectTitle | None = None
+
+
+class ProjectCreate(BaseModel):
+    """Новый проект. Чат обязателен всем, кроме суперадмина; адрес проекта строится из названия."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: ProjectTitle
+    title_en: ProjectTitle | None = None
+    deadline: date | None = None
+    chat_id: int | None = None
+
+
+class ChatOut(BaseModel):
+    id: int
+    title: str
+
+
+class UserbotOut(BaseModel):
+    """Аккаунт, которого нужно добавить в чат проекта."""
+
+    username: str | None
+    name: str | None
+
+
+class AvailableChatsOut(BaseModel):
+    ready: bool  # False — юзербот недоступен, список выдать нельзя (причина в `message`)
+    userbot: UserbotOut | None
+    chats: list[ChatOut]
+    message: str | None = None
 
 
 class AuthConfigOut(BaseModel):
