@@ -1,4 +1,5 @@
-import { lazy, Suspense } from 'react'
+import { Pencil } from 'lucide-react'
+import { lazy, Suspense, useState, type ReactNode } from 'react'
 import { Countdown } from '@/components/Countdown'
 import { SectionInfo } from '@/components/SectionInfo'
 import { Tile } from '@/components/dashboard/primitives'
@@ -9,6 +10,7 @@ import { ru } from '@/ru'
 
 // Плитки — отдельный чанк: заголовок, факты и сроки рисуются сразу, а тяжёлые графики подтягиваются рядом.
 const DashboardTiles = lazy(() => import('@/pages/DashboardTiles'))
+const RenameProjectDialog = lazy(() => import('@/components/RenameProjectDialog'))
 
 // Москва UTC+3 и Дубай UTC+4 — оба без перехода на летнее время; пояса берёт Intl, смещения не зашиты.
 const moscowDate = new Intl.DateTimeFormat('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'long', year: 'numeric' })
@@ -29,10 +31,13 @@ function DeadlineAt({ iso }: { iso: string }) {
 
 const mmss = (sec: number) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`
 
-function Fact({ label, value, sub, wide }: { label: string; value: string; sub?: string; wide?: boolean }) {
+function Fact({ label, value, sub, wide, action }: { label: string; value: string; sub?: string; wide?: boolean; action?: ReactNode }) {
   return (
     <div className={`panel p-4 ${wide ? 'col-span-2 xl:col-span-1' : ''}`}>
-      <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-fog">{label}</div>
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-fog">{label}</div>
+        {action}
+      </div>
       <div className="mono mt-2 text-base font-semibold sm:text-xl">{value}</div>
       {sub && <div className="mt-1 text-xs text-fog">{sub}</div>}
     </div>
@@ -43,6 +48,7 @@ function Fact({ label, value, sub, wide }: { label: string; value: string; sub?:
 export default function Dashboard() {
   const { data: me } = useMe()
   const { data: project } = useProject()
+  const [renaming, setRenaming] = useState(false)
   if (!me) return null
   return (
     <section className="space-y-6">
@@ -64,8 +70,31 @@ export default function Dashboard() {
             value={`${mmss(project.target_min_sec)}–${mmss(project.target_max_sec)}`}
             sub={ru.dashboard.targetRuntime(mmss(project.target_min_sec), mmss(project.target_max_sec))}
           />
-          <Fact label={ru.dashboard.project} value={project.title_en} sub={project.title} wide />
+          <Fact
+            label={ru.dashboard.project}
+            value={project.title_en}
+            sub={project.title}
+            wide
+            action={
+              me.abilities.edit_project && (
+                <button
+                  type="button"
+                  onClick={() => setRenaming(true)}
+                  aria-label={ru.projectRename.open}
+                  title={ru.projectRename.open}
+                  className="-my-3 -mr-3 flex min-h-touch min-w-touch items-center justify-center rounded-full text-fog hover:text-brass"
+                >
+                  <Pencil size={16} />
+                </button>
+              )
+            }
+          />
         </div>
+      )}
+      {renaming && project && (
+        <Suspense fallback={null}>
+          <RenameProjectDialog project={project} onClose={() => setRenaming(false)} />
+        </Suspense>
       )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">

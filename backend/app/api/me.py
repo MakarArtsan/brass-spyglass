@@ -18,10 +18,11 @@ from app.schemas import (
     MeOut,
     ProjectBrief,
     ProjectOut,
+    ProjectRename,
     SessionOut,
     UserOut,
 )
-from app.services import members
+from app.services import members, projects
 
 # Вне проекта: кто вошёл, список его проектов, аватары.
 router = APIRouter(dependencies=[Depends(session.same_origin)])
@@ -108,6 +109,7 @@ def project_me(ctx: access.CtxDep, db: Annotated[Session, Depends(get_db)]) -> M
             journal=permissions.can_view_journal(actor),
             manage_users=permissions.can_manage_users(actor),
             restore=permissions.can_restore(actor),
+            edit_project=permissions.can_edit_project(actor),
         ),
     )
 
@@ -115,6 +117,14 @@ def project_me(ctx: access.CtxDep, db: Annotated[Session, Depends(get_db)]) -> M
 @project_router.get("/project", response_model=ProjectOut)
 def project(ctx: access.CtxDep) -> models.Project:
     return ctx.project
+
+
+@project_router.patch("/project", response_model=ProjectOut)
+def rename_project(
+    body: ProjectRename, ctx: access.CtxDep, db: Annotated[Session, Depends(get_db)]
+) -> models.Project:
+    """Переименовать проект. Только владелец; адрес проекта не меняется."""
+    return projects.rename(db, ctx.actor, title=body.title, title_en=body.title_en)
 
 
 @project_router.get("/users", response_model=list[UserOut])

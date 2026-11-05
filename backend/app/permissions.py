@@ -91,6 +91,11 @@ def can_manage_users(actor: Actor) -> bool:
     return actor.role == Role.OWNER
 
 
+def can_edit_project(actor: Actor) -> bool:
+    """Название проекта меняет только владелец (суперадмин в любом проекте владелец)."""
+    return actor.role == Role.OWNER
+
+
 def require(allowed: bool, message: str = "Недостаточно прав") -> None:
     if not allowed:
         raise PermissionDenied(message)

@@ -17,6 +17,21 @@ export function useProject() {
   return useQuery({ queryKey: ['project'], queryFn: () => api<Project>('/project'), staleTime: 60_000 })
 }
 
+/** Новое название проекта (рус. и/или англ.). Адрес проекта не меняется. */
+export function useRenameProject() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { title?: string; title_en?: string }) =>
+      api<Project>('/project', { method: 'PATCH', body: JSON.stringify(body) }),
+    onSuccess: (project) => {
+      qc.setQueryData(['project'], project)
+      // Названия проектов берёт и переключатель (из сессии), и журнал.
+      void qc.invalidateQueries({ queryKey: sessionKey })
+      void qc.invalidateQueries({ queryKey: ['activity'] })
+    },
+  })
+}
+
 export function useUsers() {
   return useQuery({ queryKey: ['users'], queryFn: () => api<User[]>('/users') })
 }
