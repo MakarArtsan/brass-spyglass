@@ -6,9 +6,13 @@ import hmac
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from datetime import timedelta
 from enum import StrEnum
 
+from sqlalchemy import select
+
 from app import db as database
+from app import models
 from app.auth.membership import MembershipChecker, MembershipUnavailable
 from app.config import Settings
 from app.services import users
@@ -35,16 +39,45 @@ class LoginResult:
     name: str | None = None
 
 
-async def _is_allowed(
-    tg_id: int, membership: MembershipChecker, settings: Settings
-) -> LoginOutcome:
-    # Владелец входит всегда: так сайт доступен ещё до подключения юзербота.
-    if settings.owner_tg_id is not None and tg_id == settings.owner_tg_id:
-        return LoginOutcome.OK
+@dataclass
+class Decision:
+    outcome: LoginOutcome
+    # В каких чатах проектов состоит человек (чат → да/нет/неизвестно). None — Telegram не ответил,
+    # членство неизвестно: проекты человека остаются как были.
+    chats: dict[int, bool | None] | None = None
+
+
+def _project_chats() -> set[int]:
+    with database.session_factory()() as session:
+        return {c for c in session.scalars(select(models.Project.tg_chat_id)) if c is not None}
+
+
+def _confirmed_recently(tg_id: int, settings: Settings) -> bool:
+    with database.session_factory()() as session:
+        return users.confirmed_recently(
+            session, tg_id, timedelta(hours=settings.members_fallback_hours)
+        )
+
+
+async def _decide(tg_id: int, membership: MembershipChecker, settings: Settings) -> Decision:
+    """Входить может суперадмин (всегда: сайт доступен ещё до подключения юзербота) и тот, кто
+    состоит в чате хотя бы одного проекта. Telegram не отвечает — по последней проверке не старше
+    `members_fallback_hours`: сбой связи не должен выбрасывать команду с сайта."""
+    superadmin = settings.is_superadmin(tg_id)
+    chat_ids = await asyncio.to_thread(_project_chats)
     try:
-        return LoginOutcome.OK if await membership.is_member(tg_id) else LoginOutcome.NOT_MEMBER
+        chats = await membership.chats_of(tg_id, chat_ids)
     except MembershipUnavailable:
-        return LoginOutcome.UNAVAILABLE
+        chats = None
+    if chats is not None:
+        if superadmin or any(chats.values()):
+            return Decision(LoginOutcome.OK, chats)
+        if all(state is False for state in chats.values()):
+            return Decision(LoginOutcome.NOT_MEMBER, chats)
+        # ни в одном из прочитанных чатов человека нет, но часть чатов не прочиталась
+    if superadmin or await asyncio.to_thread(_confirmed_recently, tg_id, settings):
+        return Decision(LoginOutcome.OK, None)
+    return Decision(LoginOutcome.UNAVAILABLE)
 
 
 def _write_avatar(settings: Settings, tg_id: int, data: bytes) -> str:
@@ -55,7 +88,12 @@ def _write_avatar(settings: Settings, tg_id: int, data: bytes) -> str:
     return rel
 
 
-def _upsert(settings: Settings, profile: TgProfile, avatar_path: str | None) -> tuple[int, str]:
+def _upsert(
+    settings: Settings,
+    profile: TgProfile,
+    avatar_path: str | None,
+    chats: dict[int, bool | None] | None,
+) -> tuple[int, str]:
     with database.session_factory()() as session:
         user = users.upsert_from_telegram(
             session,
@@ -64,6 +102,7 @@ def _upsert(settings: Settings, profile: TgProfile, avatar_path: str | None) -> 
             name=profile.name,
             avatar_path=avatar_path,
             owner_tg_id=settings.owner_tg_id,
+            chats=chats,
         )
         session.commit()
         return user.id, user.name
@@ -73,9 +112,9 @@ async def authenticate(
     profile: TgProfile, membership: MembershipChecker, settings: Settings
 ) -> LoginResult:
     """Общая часть входа через бота и через Login Widget."""
-    outcome = await _is_allowed(profile.tg_id, membership, settings)
-    if outcome is not LoginOutcome.OK:
-        return LoginResult(outcome)
+    decision = await _decide(profile.tg_id, membership, settings)
+    if decision.outcome is not LoginOutcome.OK:
+        return LoginResult(decision.outcome)
 
     avatar_path: str | None = None
     if profile.load_avatar is not None:
@@ -86,7 +125,7 @@ async def authenticate(
         if data:
             avatar_path = await asyncio.to_thread(_write_avatar, settings, profile.tg_id, data)
 
-    user_id, name = await asyncio.to_thread(_upsert, settings, profile, avatar_path)
+    user_id, name = await asyncio.to_thread(_upsert, settings, profile, avatar_path, decision.chats)
     return LoginResult(LoginOutcome.OK, user_id, name)
 
 

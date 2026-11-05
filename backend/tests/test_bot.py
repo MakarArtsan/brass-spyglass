@@ -2,10 +2,14 @@
 
 from types import SimpleNamespace
 
+import pytest
+
 from app.auth import telegram as tg
 from app.auth.tokens import LoginTokenStore
 from app.config import get_settings
 from tests.test_auth import FakeMembership
+
+pytestmark = pytest.mark.usefixtures("bound_chat")  # проект фильма привязан к чату
 
 
 class FakeClient:

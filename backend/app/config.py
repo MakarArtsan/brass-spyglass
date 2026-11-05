@@ -35,7 +35,10 @@ class Settings(BaseSettings):
     upload_chunk_mb: int = 8
     # Кэш просмотра не скачанных файлов Telegram: старые файлы удаляются, когда кэш больше этого.
     tg_preview_cache_mb: int = 500
-    membership_recheck_hours: int = 24
+    # Участников проектов сверяют со списками их чатов раз в столько часов (и по событиям чата).
+    members_sync_hours: int = 6
+    # Юзербот недоступен: вход работает по последней подтверждённой проверке не старше этого срока.
+    members_fallback_hours: int = 72
     # Сжатие картинок при загрузке. Выключатель на случай сбоя; пути к кодировщикам — для тестов.
     compress_images: bool = True
     pngquant_bin: str = "pngquant"

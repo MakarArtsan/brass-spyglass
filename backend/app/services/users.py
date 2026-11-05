@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app import models
+from app.config import Settings, get_settings
 from app.constants import USER_COLORS, Role
 from app.db import utcnow
 from app.services import members
@@ -29,8 +30,12 @@ def upsert_from_telegram(
     name: str,
     avatar_path: str | None,
     owner_tg_id: int | None,
+    chats: dict[int, bool | None] | None = None,
 ) -> models.User:
-    """Вход подтверждён: создаёт участника или обновляет имя, @username и аватар из Telegram."""
+    """Вход подтверждён: создаёт участника или обновляет имя, @username и аватар из Telegram.
+
+    `chats` — в каких чатах проектов человек состоит (см. `members.sync_user`); None — Telegram
+    недоступен, членство неизвестно: проекты и отметка о проверке остаются как были."""
     user = db.scalar(select(models.User).where(models.User.tg_id == tg_id))
     created = user is None
     if user is None:
@@ -43,14 +48,14 @@ def upsert_from_telegram(
     if owner_tg_id is not None and tg_id == owner_tg_id:
         user.role = Role.OWNER.value
     now = utcnow()
-    user.membership_checked_at = now
+    # В запасном режиме (Telegram недоступен, chats пуст) проверку не продлеваем: иначе вышедший
+    # из чата входил бы вечно, пока связи нет.
+    if chats is not None:
+        user.membership_checked_at = now
     user.last_seen_at = now
     user.access_revoked_at = None
     db.flush()
-    # Пока проект один, вошедший — его участник (с чатами на проект это решит синхронизация).
-    project = db.scalar(select(models.Project).order_by(models.Project.id).limit(1))
-    if project is not None:
-        members.ensure(db, project, user)
+    members.sync_user(db, user, chats)
     log_activity(db, user.id, "login", "user", user.id, {"created": created})
     return user
 
@@ -61,10 +66,6 @@ def touch_seen(db: Session, user: models.User) -> None:
         user.last_seen_at = now
 
 
-def mark_membership_ok(db: Session, user: models.User) -> None:
-    user.membership_checked_at = utcnow()
-
-
 def revoke_access(db: Session, user: models.User) -> None:
     """Человек вышел из чата — доступ закрыт до следующего успешного входа."""
     user.access_revoked_at = utcnow()
@@ -72,16 +73,36 @@ def revoke_access(db: Session, user: models.User) -> None:
     log_activity(db, None, "access_revoked", "user", user.id)
 
 
-def due_for_recheck(db: Session, max_age: timedelta, limit: int = 50) -> list[models.User]:
-    cutoff = utcnow() - max_age
-    stmt = (
-        select(models.User)
-        .where(
+def revoke_orphans(db: Session, settings: Settings | None = None) -> int:
+    """Доступ закрывается тем, кто не состоит ни в одном проекте (вышел из всех чатов).
+
+    Суперадмина и аккаунты без Telegram не трогаем. Вернётся человек в чат и войдёт заново —
+    доступ вернётся.
+    """
+    settings = settings or get_settings()
+    has_project = select(models.ProjectMember.user_id).where(models.ProjectMember.active.is_(True))
+    orphans = db.scalars(
+        select(models.User).where(
             models.User.tg_id.is_not(None),
             models.User.access_revoked_at.is_(None),
-            (models.User.membership_checked_at.is_(None))
-            | (models.User.membership_checked_at < cutoff),
+            models.User.id.not_in(has_project),
         )
-        .limit(limit)
     )
-    return list(db.scalars(stmt))
+    closed = 0
+    for user in list(orphans):
+        if settings.is_superadmin(user.tg_id):
+            continue
+        revoke_access(db, user)
+        closed += 1
+    return closed
+
+
+def confirmed_recently(db: Session, tg_id: int, max_age: timedelta) -> bool:
+    """Запасной путь входа, когда Telegram не отвечает: человека недавно подтверждал чат,
+    доступ ему не закрывали, и он всё ещё участник какого-нибудь проекта."""
+    user = db.scalar(select(models.User).where(models.User.tg_id == tg_id))
+    if user is None or user.access_revoked_at is not None or user.membership_checked_at is None:
+        return False
+    if utcnow() - user.membership_checked_at > max_age:
+        return False
+    return bool(members.active_project_ids(db, user.id))

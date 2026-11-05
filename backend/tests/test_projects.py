@@ -58,11 +58,13 @@ def test_unique_slug_adds_a_number_when_taken(db):
 
 def test_a_new_member_is_team_and_a_superadmin_is_owner(db):
     project = projects.ensure_default_project(db)
+    project.tg_chat_id = -100501
+    in_chat = {-100501: True}
     plain = users.upsert_from_telegram(
-        db, tg_id=501, username=None, name="Лена", avatar_path=None, owner_tg_id=None
+        db, tg_id=501, username=None, name="Лена", avatar_path=None, owner_tg_id=None, chats=in_chat
     )
     boss = users.upsert_from_telegram(
-        db, tg_id=502, username=None, name="Босс", avatar_path=None, owner_tg_id=None
+        db, tg_id=502, username=None, name="Босс", avatar_path=None, owner_tg_id=None, chats=in_chat
     )
     assert members.get(db, project.id, plain.id).role == Role.TEAM.value
     # суперадмин из списка в переменной окружения становится владельцем проекта при вступлении
@@ -79,13 +81,15 @@ def test_a_new_member_is_team_and_a_superadmin_is_owner(db):
 
 def test_login_creates_a_member_of_the_project_with_the_users_color(db):
     project = projects.ensure_default_project(db)
+    project.tg_chat_id = -100601
+    in_chat = {-100601: True}
     user = users.upsert_from_telegram(
-        db, tg_id=601, username="u", name="Игорь", avatar_path=None, owner_tg_id=None
+        db, tg_id=601, username="u", name="Игорь", avatar_path=None, owner_tg_id=None, chats=in_chat
     )
     member = members.get(db, project.id, user.id)
     assert member is not None and member.active and member.color == user.color
     again = users.upsert_from_telegram(
-        db, tg_id=601, username="u", name="Игорь", avatar_path=None, owner_tg_id=None
+        db, tg_id=601, username="u", name="Игорь", avatar_path=None, owner_tg_id=None, chats=in_chat
     )
     assert again.id == user.id
     count = db.query(models.ProjectMember).filter_by(user_id=user.id).count()
