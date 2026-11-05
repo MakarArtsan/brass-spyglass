@@ -99,11 +99,13 @@ backend/tests/              pytest; test_architecture.py следит, что з
 frontend/src/
   brand.ts                  цвета, шрифты, тексты бренда — единственный источник токенов
   ru.ts                     ВСЕ строки интерфейса
-  lib/                      types, queries (TanStack Query + оптимистичные обновления), uploader, format, toast
+  lib/                      types, queries (TanStack Query + оптимистичные обновления), uploader, format, toast,
+                            scenarioImport (запросы и тексты для импорта сценария)
   hooks/                    usePerms (только прячет кнопки — права проверяет сервер), usePanelParam
   components/               StatusPill, CardPanel, Comments, Uploads, … ; media/ — плееры и медиатека;
-                            dashboard/ — виджеты на SVG; telegram/ — окно импорта и прогресс
-  pages/                    Shots, Scenes, Assets, Setups, Sound, Tasks, Media, Telegram, Journal, Dashboard
+                            dashboard/ — виджеты на SVG; telegram/ — окно импорта и прогресс;
+                            import/ — шаги экрана «Импорт сценария» (промпт, файл, ошибки, предпросмотр)
+  pages/                    Shots, Scenes, Assets, Setups, Sound, Tasks, Media, Telegram, Journal, Dashboard, ImportScenario
                             (+ DashboardTiles — ленивый чанк графиков), Animatic, Export; вне проекта: Login,
                             ProjectRedirect (выбор проекта), NewProject (свой проект: чат → название → срок)
 frontend/e2e/               Playwright (desktop 1440 + phone 390); fixtures.ts, screenshots.mjs

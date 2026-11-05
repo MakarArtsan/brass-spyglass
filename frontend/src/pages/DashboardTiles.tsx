@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { ActivityTile } from '@/components/dashboard/Activity'
 import { BurndownTile } from '@/components/dashboard/Burndown'
 import { Readiness, RuntimeGauge, SeedanceGauge } from '@/components/dashboard/Gauges'
@@ -29,6 +30,17 @@ export default function DashboardTiles() {
         )}
         {dash && (
           <>
+            {me.abilities.import_scenario && dash.film_strip.length === 0 && dash.readiness.shots.total === 0 && dash.readiness.assets.total === 0 && (
+              <div className="panel flex flex-wrap items-center gap-x-6 gap-y-3 p-4 lg:col-span-12">
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-xl">{ru.dash.emptyProject}</h2>
+                  <p className="text-sm text-fog">{ru.dash.emptyProjectLead}</p>
+                </div>
+                <Link to="/import" className="inline-flex min-h-touch items-center rounded-lg bg-brass px-4 text-sm font-semibold text-on-brass hover:bg-brass-light">
+                  {ru.dash.emptyProjectAction}
+                </Link>
+              </div>
+            )}
             <div className="lg:col-span-7">
               <Readiness data={dash.readiness} />
             </div>

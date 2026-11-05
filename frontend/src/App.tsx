@@ -21,6 +21,7 @@ const Animatic = lazy(() => import('@/pages/Animatic'))
 const Assets = lazy(() => import('@/pages/Assets'))
 const Brand = lazy(() => import('@/pages/Brand'))
 const Export = lazy(() => import('@/pages/Export'))
+const ImportScenario = lazy(() => import('@/pages/ImportScenario'))
 const Journal = lazy(() => import('@/pages/Journal'))
 const Media = lazy(() => import('@/pages/Media'))
 const SceneDetail = lazy(() => import('@/pages/SceneDetail'))
@@ -38,6 +39,7 @@ const IMPLEMENTED: Record<string, JSX.Element> = {
   '/shots': <Shots />,
   '/animatic': <Animatic />,
   '/export': <Export />,
+  '/import': <ImportScenario />,
   '/media': <Media />,
   '/telegram': <Telegram />,
   '/assets': <Assets />,
