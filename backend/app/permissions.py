@@ -61,6 +61,12 @@ def require_upload(actor: Actor, guest_message: str = "Гость не загр�
         raise PermissionDenied(PENDING_MESSAGE)
 
 
+def can_import(actor: Actor) -> bool:
+    """Импорт сценария (и промпт к нему): владелец и режиссёр. Проект может ждать подтверждения:
+    импорт пишет только карточки, на диск ничего не кладёт."""
+    return actor.role in (Role.OWNER, Role.DIRECTOR)
+
+
 def can_export(actor: Actor) -> bool:
     return actor.role != Role.GUEST
 

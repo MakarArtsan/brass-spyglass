@@ -233,7 +233,7 @@ def test_login_sets_httponly_30_day_cookie_and_me_works(client):
     assert me["user"]["role"] == "owner"
     assert me["abilities"] == {
         "upload": True, "export": True, "journal": True, "manage_users": True, "restore": True,
-        "edit_project": True,
+        "edit_project": True, "import_scenario": True,
     }  # fmt: skip
 
 

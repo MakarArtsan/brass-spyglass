@@ -590,7 +590,12 @@ def burndown(
 # --- обёртки над БД для дашборда -----------------------------------------------------------------
 
 
-NOISE_ACTIONS = ("login", "access_revoked", "import")  # не «работа команды»: в активность не идут
+NOISE_ACTIONS = (
+    "login",
+    "access_revoked",
+    "import",
+    "import_scenario",
+)  # не «работа команды»: в активность не идут
 DASHBOARD_ENTITIES = (
     ("scene", models.Scene),
     ("shot", models.Shot),

@@ -22,6 +22,7 @@ from app.api import exports as exports_api
 from app.api import files as files_api
 from app.api import notifications as notifications_api
 from app.api import projects as projects_api
+from app.api import scenario_import as scenario_import_api
 from app.api import telegram as telegram_api
 from app.auth.telegram import TelegramService
 from app.auth.tokens import LoginTokenStore
@@ -180,6 +181,7 @@ def create_app() -> FastAPI:
         dashboard.router,
         animatic.router,
         exports_api.router,
+        scenario_import_api.router,
         notifications_api.router,
         telegram_api.router,
         files_api.router,

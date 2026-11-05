@@ -658,6 +658,7 @@ export const ru = {
       attach: 'файл привязан',
       detach: 'файл отвязан',
       import: 'импорт Excel',
+      import_scenario: 'импорт сценария',
       login: 'вход',
       access_revoked: 'доступ закрыт',
       version: 'новая версия файла',

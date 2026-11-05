@@ -40,6 +40,7 @@ SCOPED: tuple[type, ...] = (
     models.Activity,
     models.ExportJob,
     models.Notification,
+    models.ImportRun,
 )
 _SCOPED = frozenset(SCOPED)
 

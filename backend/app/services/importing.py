@@ -99,12 +99,27 @@ def apply_bundle(
     *,
     overwrite_work_fields: bool = False,
     actor_id: int | None = None,
+    action: str = "import",
+    extra: dict[str, Any] | None = None,
 ) -> ImportReport:
+    """`actor_id` — автор новых записей (`created_by`) и записи в журнале; без него (Excel-импорт,
+    сид) авторства нет. `action` и `extra` — как назвать запись в журнале и что в неё добавить."""
     report = ImportReport(warnings=list(bundle.warnings))
     overwrite = overwrite_work_fields
+    authored = {"created_by": actor_id} if actor_id is not None else {}
 
     def upsert(model, kind, lookup, content, work, create_only=None):  # noqa: ANN001, ANN202
-        return _upsert(db, model, kind, lookup, content, work, create_only or {}, report, overwrite)
+        return _upsert(
+            db,
+            model,
+            kind,
+            lookup,
+            content,
+            work,
+            {**(authored if hasattr(model, "created_by") else {}), **(create_only or {})},
+            report,
+            overwrite,
+        )
 
     # Сцены
     next_scene_order = (
@@ -271,5 +286,13 @@ def apply_bundle(
             _work(row),
         )
 
-    log_activity(db, actor_id, "import", "project", project_id, report.summary(), project_id)
+    log_activity(
+        db,
+        actor_id,
+        action,
+        "project",
+        project_id,
+        {**report.summary(), **(extra or {})},
+        project_id,
+    )
     return report
