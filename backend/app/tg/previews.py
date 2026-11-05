@@ -8,13 +8,19 @@ from app.tg.parse import import_name
 from app.tg.types import MediaInfo
 
 
-def target(settings: Settings, info: MediaInfo) -> Path:
+def _folder(settings: Settings, chat_id: int) -> Path:
+    """Кэш каждого чата — в своей папке: номера сообщений в разных чатах повторяются, и без этого
+    проект видел бы файл из чужого чата."""
+    return settings.tg_view_dir / str(chat_id)
+
+
+def target(settings: Settings, chat_id: int, info: MediaInfo) -> Path:
     suffix = Path(import_name(info)).suffix.lower()
-    return settings.tg_view_dir / f"{info.message_id}-{info.topic_id}{suffix}"
+    return _folder(settings, chat_id) / f"{info.message_id}-{info.topic_id}{suffix}"
 
 
-def cached(settings: Settings, message_id: int, topic_id: int) -> Path | None:
-    folder = settings.tg_view_dir
+def cached(settings: Settings, chat_id: int, message_id: int, topic_id: int) -> Path | None:
+    folder = _folder(settings, chat_id)
     if not folder.is_dir():
         return None
     for path in folder.glob(f"{message_id}-{topic_id}.*"):
@@ -29,7 +35,8 @@ def evict(settings: Settings, keep: Path | None = None) -> int:
     if not folder.is_dir():
         return 0
     cap = settings.tg_preview_cache_mb * 1024 * 1024
-    files = sorted((p for p in folder.iterdir() if p.is_file()), key=lambda p: p.stat().st_mtime)
+    # Кэш общий на все чаты (лимит один на диск); файлы старой раскладки лежат прямо в папке.
+    files = sorted((p for p in folder.rglob("*") if p.is_file()), key=lambda p: p.stat().st_mtime)
     total = sum(p.stat().st_size for p in files)
     removed = 0
     for path in files:

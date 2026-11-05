@@ -43,9 +43,12 @@ class FloodWaitError(Exception):
 
 class FakeGateway:
     def __init__(
-        self, topics: list[TopicInfo], messages: dict[int, list[tuple[int, MediaInfo | None]]]
+        self,
+        topics: list[TopicInfo],
+        messages: dict[int, list[tuple[int, MediaInfo | None]]],
+        chat_id: int = CHAT,
     ):
-        self.chat_id = CHAT
+        self.chat_id = chat_id
         self._topics = topics
         self.messages = messages  # topic_id → [(message_id, media | None)]
         self.history_calls: list[dict] = []
@@ -113,14 +116,16 @@ class FakeGateway:
         )
 
 
-def simple_chat(per_topic: int = 5) -> FakeGateway:
+def simple_chat(
+    per_topic: int = 5, chat_id: int = CHAT, first_message_id: int = 100
+) -> FakeGateway:
     topics = [TopicInfo(GENERAL_TOPIC, "Общая"), TopicInfo(5, "Персонажи"), TopicInfo(9, "Локации")]
     messages: dict[int, list[tuple[int, MediaInfo | None]]] = {}
-    next_id = 100
+    next_id = first_message_id
     for topic in (5, 9):
         rows = []
         for _ in range(per_topic):
             next_id += 1
             rows.append((next_id, media(next_id, topic)))
         messages[topic] = rows
-    return FakeGateway(topics, messages)
+    return FakeGateway(topics, messages, chat_id)

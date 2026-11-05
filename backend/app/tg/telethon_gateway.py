@@ -31,13 +31,21 @@ def is_stale_reference(exc: BaseException) -> bool:
 
 
 class TelethonGateway:
-    def __init__(self, client: Any, chat_id: int, limiter: RateLimiter | None = None) -> None:
+    def __init__(
+        self,
+        client: Any,
+        chat_id: int,
+        limiter: RateLimiter | None = None,
+        *,
+        download_lock: asyncio.Lock | None = None,
+    ) -> None:
         self.client = client
         self.chat_id = chat_id
         self.limiter = limiter or RateLimiter()
         self._input: Any = None
         self._forum: bool | None = None
-        self._download_lock = asyncio.Lock()
+        # Лимитер и замок общие у всех чатов аккаунта (см. `pool.py`): файлы качаются по одному.
+        self._download_lock = download_lock or asyncio.Lock()
         self._recent: OrderedDict[int, Any] = OrderedDict()
 
     # --- служебное -----------------------------------------------------------------------------

@@ -29,14 +29,15 @@ async def tg(env, monkeypatch):
         media(gateway.messages[5][3][0], 5, "link", url="https://example.com/ref", mime=None),
     )
     with TestClient(create_app()) as client:
-        runtime.gateway, runtime.loop = gateway, asyncio.get_running_loop()
+        runtime.register(gateway)
+        runtime.loop = asyncio.get_running_loop()
         indexer = Indexer(gateway, database.session_factory(), get_settings())
         await indexer.run_once()
         for rows in gateway.messages.values():
             for message_id, info in rows:
                 if info and info.kind != "link":
                     gateway.files[message_id] = png_bytes()
-        runtime.indexer = indexer
+        runtime.register(gateway, indexer)
         login(client, "owner", "Артём")
         yield client, gateway
     runtime.reset()
@@ -297,7 +298,7 @@ async def test_import_refuses_when_the_disk_limit_would_be_exceeded(tg):
 
 async def test_import_without_a_connected_userbot_says_so(tg):
     client, _ = tg
-    runtime.gateway = None
+    runtime.gateways.clear()
     one = media_ids(client)["items"][0]["id"]
     job = await wait_job(client, import_into(client, [one])["job_id"])
     assert job["status"] == "failed" and "не подключён" in job["error"]
@@ -395,13 +396,13 @@ async def test_status_reports_the_index_and_the_connection(tg):
 
 async def test_only_the_owner_can_start_a_sync(tg):
     client, _ = tg
-    indexer = runtime.indexer
+    indexer = runtime.indexer_for(CHAT)
     indexer._wake.clear()
     assert client.post("/api/tg/sync").status_code == 202 and indexer._wake.is_set()
     login(client, "director", "Дина")
     assert client.post("/api/tg/sync").status_code == 403
     login(client, "owner", "Артём")
-    runtime.indexer = None
+    runtime.indexers.clear()
     assert client.post("/api/tg/sync").status_code == 503
 
 

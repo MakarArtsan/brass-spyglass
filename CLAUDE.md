@@ -64,7 +64,8 @@ backend/app/
   storage.py                занятое место на /data, лимит проекта (`ensure_room` — отказ при нехватке)
   linkpreview.py            карточка ссылки (Open Graph) с защитой от SSRF
   tg/                       Telegram: types (Gateway), telethon_gateway (ЕДИНСТВЕННОЕ место с типами
-                            Telethon), parse, limiter (1 запрос/с, FloodWait), indexer, importer, previews
+                            Telethon), parse, limiter (1 запрос/с, FloodWait), indexer, pool (пара на чат проекта),
+                            runtime (шлюзы/индексаторы по чатам), importer, previews
   xlsx_reader.py            чтение Excel-трекера по заголовкам колонок → Bundle (без записи в БД)
   services/                 ЕДИНСТВЕННОЕ место записи в БД; каждое изменение пишет `activity`
     core.py                 общие операции: создание/правка/удаление/смена статуса, журнал
@@ -130,6 +131,9 @@ frontend/e2e/               Playwright (desktop 1440 + phone 390); fixtures.ts, 
 - **Telegram.** Типы Telethon не выходят за `tg/telethon_gateway.py`; индексатор, сервисы и тесты работают
   с `tg/types.py` и подставным шлюзом (`tests/fake_telegram.py`). Все запросы к Telegram — через
   `RateLimiter` (≤ 1/с, FloodWait). Файлы качаются по одному. `/api/tg/*` — только не-гость.
+  У каждого проекта свой чат: шлюз и индексатор на чат (`tg/runtime.py`: `gateway_for(chat_id)`, пул — `tg/pool.py`),
+  лимитер и замок загрузок общие на аккаунт; кэш просмотра раскладывается по папкам чатов (номера сообщений в
+  разных чатах повторяются).
 - **SSE.** Событие создаётся в `log_activity`/`jobs`, уходит подписчикам из `after_commit`, откат его отбрасывает.
   Клиент (`lib/live.ts`) перечитывает изменённое; в событии данных нет.
 - **Поиск без учёта регистра** — только через `db.ci_contains` (SQLite не приводит регистр кириллицы).
