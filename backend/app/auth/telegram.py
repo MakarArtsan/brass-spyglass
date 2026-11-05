@@ -1,7 +1,7 @@
 """Telethon: бот для входа и юзербот (StringSession) для проверки членства.
 
-Бот и юзербот живут в том же процессе и event loop, что и FastAPI. На этапе 2 юзербот
-получит индекс тем и медиа; сейчас он нужен только для списка участников чата.
+Бот и юзербот живут в том же процессе и event loop, что и FastAPI. Юзербот читает списки участников
+чатов проектов (вход и синхронизация `project_member`) и индекс тем и медиа.
 """
 
 import asyncio
@@ -10,9 +10,9 @@ import io
 import logging
 import re
 import struct
-from datetime import timedelta
 from pathlib import Path
 
+from sqlalchemy import select
 from telethon import TelegramClient, errors, events
 from telethon.sessions import StringSession
 
@@ -27,12 +27,14 @@ from app.auth.membership import (
 )
 from app.auth.tokens import LoginTokenStore
 from app.config import Settings
-from app.services import users
+from app.services import members, users
 
 log = logging.getLogger(__name__)
 
 CONNECT_ATTEMPTS = 3
 CONNECT_PAUSE_SEC = 3
+SYNC_RETRY_SEC = 600  # не все чаты прочитались — повторить раньше планового срока
+EVENT_DEBOUNCE_SEC = 5.0  # несколько вступлений подряд — одно чтение списка
 
 START_RE = re.compile(r"^/start(?:@\w+)?(?:\s+(\S+))?\s*$")
 
@@ -93,7 +95,10 @@ class TelegramService:
         self.userbot: TelegramClient | None = None
         self.membership: MembershipChecker = DisabledMembership()
         self.bot_username: str = settings.tg_bot_username.lstrip("@")
-        self._recheck_task: asyncio.Task[None] | None = None
+        self._sync_task: asyncio.Task[None] | None = None
+        self._event_tasks: dict[int, asyncio.Task[None]] = {}
+        self.sync_pause_sec = 1.0  # между чатами: не упираться во FloodWait
+        self.event_debounce_sec = EVENT_DEBOUNCE_SEC
         self.userbot_error: str | None = None  # почему юзербот не подключён (для экрана «Telegram»)
 
     @property
@@ -120,14 +125,14 @@ class TelegramService:
             self.bot = None
             return
 
-        if s.tg_session and s.tg_chat_id is not None:
-            await self._connect_userbot(s.tg_api_id, s.tg_session, s.tg_chat_id)
+        if s.tg_session:
+            await self._connect_userbot(s.tg_api_id, s.tg_session)
         else:
-            log.warning("TG_SESSION или TG_CHAT_ID не заданы: членство в чате не проверяется")
+            log.warning("TG_SESSION не задана: членство в чатах проектов не проверяется")
+        if self.userbot is not None:
+            self._sync_task = asyncio.create_task(self._sync_loop(), name="members-sync")
 
-        self._recheck_task = asyncio.create_task(self._recheck_loop(), name="membership-recheck")
-
-    async def _connect_userbot(self, api_id: int, session: str, chat_id: int) -> None:
+    async def _connect_userbot(self, api_id: int, session: str) -> None:
         """Подключает юзербота. Сбои связи повторяются (на старте сеть бывает не готова),
         остальное сразу уходит в `userbot_error`: неверная сессия от повтора не исправится."""
         for attempt in range(1, CONNECT_ATTEMPTS + 1):
@@ -144,7 +149,8 @@ class TelegramService:
                     log.error("сессия юзербота недействительна (TG_SESSION)")
                     return
                 self.userbot = client
-                self.membership = TelethonMembership(client, chat_id)
+                self.membership = TelethonMembership(client)
+                client.add_event_handler(self._on_chat_action, events.ChatAction)
                 self.userbot_error = None
                 return
             except Exception as exc:
@@ -162,10 +168,12 @@ class TelegramService:
                 await asyncio.sleep(CONNECT_PAUSE_SEC * attempt)
 
     async def stop(self) -> None:
-        if self._recheck_task:
-            self._recheck_task.cancel()
+        tasks = [t for t in (self._sync_task, *self._event_tasks.values()) if t is not None]
+        for task in tasks:
+            task.cancel()
+        for task in tasks:
             with contextlib.suppress(asyncio.CancelledError):
-                await self._recheck_task
+                await task
         for client in (self.bot, self.userbot):
             if client is not None:
                 await client.disconnect()  # type: ignore[misc]
@@ -219,47 +227,99 @@ class TelegramService:
             self.settings.owner_tg_id, str(path), caption=caption, force_document=True
         )
 
-    # --- ежедневная проверка членства ------------------------------------------------------
+    # --- участники проектов = участники их чатов -------------------------------------------
 
-    async def _recheck_loop(self) -> None:
-        """Каждый час проверяет тех, у кого проверка старше суток; вышедшим закрывает доступ."""
-        max_age = timedelta(hours=self.settings.membership_recheck_hours)
+    async def _sync_loop(self) -> None:
+        """Раз в `members_sync_hours` приводит участников каждого проекта к списку его чата.
+        Если какой-то чат не прочитался, повторяет через несколько минут, а не через 6 часов."""
+        interval = self.settings.members_sync_hours * 3600
         while True:
             try:
-                await self.recheck_members(max_age)
+                ok = await self.sync_members()
             except Exception:
-                log.exception("ошибка проверки членства")
-            await asyncio.sleep(3600)
+                log.exception("ошибка синхронизации участников проектов")
+                ok = False
+            await asyncio.sleep(interval if ok else min(interval, SYNC_RETRY_SEC))
 
-    async def recheck_members(self, max_age: timedelta) -> int:
-        """Возвращает число закрытых доступов. Ошибки Telegram доступ не закрывают."""
-        revoked = 0
-        due = await asyncio.to_thread(self._due_ids, max_age)
-        for user_id, tg_id in due:
-            if self.settings.owner_tg_id is not None and tg_id == self.settings.owner_tg_id:
-                keep = True
-            else:
-                try:
-                    keep = await self.membership.is_member(tg_id)
-                except MembershipUnavailable:
-                    return revoked  # Telegram недоступен — попробуем в следующий час
-            await asyncio.to_thread(self._apply_recheck, user_id, keep)
-            revoked += 0 if keep else 1
-        return revoked
+    async def sync_members(self) -> bool:
+        """Чаты всех проектов → `project_member`. True — все чаты прочитаны. Ошибки Telegram никого
+        не выгоняют: чат, который не прочитался, остаётся как был."""
+        chats = await asyncio.to_thread(self._project_chats)
+        ok = True
+        for index, (project_id, chat_id) in enumerate(chats):
+            if index:
+                await asyncio.sleep(self.sync_pause_sec)
+            ok = await self._sync_chat(project_id, chat_id) and ok
+        await asyncio.to_thread(self._revoke_orphans)
+        return ok
 
-    @staticmethod
-    def _due_ids(max_age: timedelta) -> list[tuple[int, int]]:
-        with database.session_factory()() as session:
-            return [(u.id, u.tg_id) for u in users.due_for_recheck(session, max_age) if u.tg_id]
+    async def _sync_chat(self, project_id: int, chat_id: int) -> bool:
+        try:
+            ids = await self.membership.participants(chat_id)
+        except MembershipUnavailable:
+            log.warning(
+                "чат %s проекта %s не прочитан: участники остаются как были", chat_id, project_id
+            )
+            return False
+        if not ids:
+            # В живом чате всегда есть хотя бы сам юзербот: пустой список — сбой чтения, а не «все
+            # вышли». Выгонять по нему нельзя.
+            log.warning("чат %s вернул пустой список участников: пропускаем", chat_id)
+            return False
+        joined, left = await asyncio.to_thread(self._apply_sync, project_id, ids)
+        if joined or left:
+            log.info("проект %s: вступили %s, вышли %s", project_id, joined, left)
+        return True
 
-    @staticmethod
-    def _apply_recheck(user_id: int, keep: bool) -> None:
-        with database.session_factory()() as session:
-            user = session.get(models.User, user_id)
-            if user is None:
+    # --- события чата: вступил/вышел — не ждать 6 часов ---------------------------------------
+
+    async def _on_chat_action(self, event: events.ChatAction.Event) -> None:
+        if not (event.user_joined or event.user_added or event.user_left or event.user_kicked):
+            return
+        chat_id = event.chat_id
+        for project_id, project_chat in await asyncio.to_thread(self._project_chats):
+            if project_chat == chat_id:
+                self.membership.forget(chat_id)  # следующий вход прочтёт список заново
+                self._schedule_chat_sync(project_id, chat_id)
                 return
-            if keep:
-                users.mark_membership_ok(session, user)
-            else:
-                users.revoke_access(session, user)
+
+    def _schedule_chat_sync(self, project_id: int, chat_id: int) -> None:
+        task = self._event_tasks.get(chat_id)
+        if task is not None and not task.done():
+            return  # уже ждём: прочтём список один раз за все события
+        self._event_tasks[chat_id] = asyncio.create_task(self._sync_chat_later(project_id, chat_id))
+
+    async def _sync_chat_later(self, project_id: int, chat_id: int) -> None:
+        await asyncio.sleep(self.event_debounce_sec)
+        try:
+            await self._sync_chat(project_id, chat_id)
+            await asyncio.to_thread(self._revoke_orphans)
+        except Exception:
+            log.exception("ошибка синхронизации чата %s по событию", chat_id)
+
+    # --- работа с БД в потоке ------------------------------------------------------------------
+
+    @staticmethod
+    def _project_chats() -> list[tuple[int, int]]:
+        with database.session_factory()() as session:
+            rows = session.execute(
+                select(models.Project.id, models.Project.tg_chat_id)
+                .where(models.Project.tg_chat_id.is_not(None))
+                .order_by(models.Project.id)
+            )
+            return [(project_id, chat_id) for project_id, chat_id in rows]
+
+    def _apply_sync(self, project_id: int, tg_ids: set[int]) -> tuple[int, int]:
+        with database.session_factory()() as session:
+            project = session.get(models.Project, project_id)
+            if project is None:
+                return 0, 0
+            result = members.sync_chat(session, project, tg_ids, self.settings)
             session.commit()
+            return result
+
+    def _revoke_orphans(self) -> int:
+        with database.session_factory()() as session:
+            closed = users.revoke_orphans(session, self.settings)
+            session.commit()
+            return closed

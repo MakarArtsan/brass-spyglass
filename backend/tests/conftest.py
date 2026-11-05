@@ -63,6 +63,19 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     get_settings.cache_clear()
 
 
+BOUND_CHAT = -1001234567890  # чат проекта фильма (как TG_CHAT_ID в рабочей конфигурации)
+
+
+@pytest.fixture
+def bound_chat(env: Path, monkeypatch: pytest.MonkeyPatch) -> int:
+    """Проект фильма привязан к чату: вход идёт по членству в чатах проектов, а не «всем подряд»."""
+    from app.config import get_settings
+
+    monkeypatch.setenv("TG_CHAT_ID", str(BOUND_CHAT))
+    get_settings.cache_clear()
+    return BOUND_CHAT
+
+
 @pytest.fixture
 def db(env: Path) -> Iterator[Session]:
     """Сессия на свежей БД, созданной миграциями (заодно проверяет их)."""

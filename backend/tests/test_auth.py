@@ -4,7 +4,6 @@ import asyncio
 import hashlib
 import hmac
 import time
-from datetime import timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -14,10 +13,11 @@ from app import db as database
 from app import models
 from app.auth import flow, session
 from app.auth.membership import MembershipUnavailable
-from app.auth.telegram import TelegramService
 from app.auth.tokens import LoginTokenStore
 from app.config import get_settings
 from tests.conftest import OWNER_TG_ID
+
+pytestmark = pytest.mark.usefixtures("bound_chat")  # проект фильма привязан к чату
 
 PETYA = flow.TgProfile(tg_id=5001, username="petya", name="Петя")
 
@@ -28,14 +28,44 @@ class FakeClient:
 
 
 class FakeMembership:
-    def __init__(self, members: set[int] | None = None, down: bool = False) -> None:
-        self.members = members or set()
-        self.down = down
+    """Подставные списки чатов. `members` состоят в каждом чате, `chats` — точная раскладка по чатам;
+    `broken` — чаты, которые не читаются; `down` — Telegram не отвечает совсем."""
 
-    async def is_member(self, tg_id: int) -> bool:
+    def __init__(
+        self,
+        members: set[int] | None = None,
+        down: bool = False,
+        chats: dict[int, set[int]] | None = None,
+        broken: set[int] | None = None,
+    ) -> None:
+        self.members = members or set()
+        self.chats = chats or {}
+        self.broken = broken or set()
+        self.down = down
+        self.forgotten: list[int] = []
+        self.reads: list[int] = []
+
+    def _state(self, chat_id: int, tg_id: int) -> bool | None:
+        if chat_id in self.broken:
+            return None
+        return tg_id in self.members or tg_id in self.chats.get(chat_id, set())
+
+    async def chats_of(self, tg_id: int, chat_ids) -> dict[int, bool | None]:
         if self.down:
             raise MembershipUnavailable("нет связи")
-        return tg_id in self.members
+        found = {chat: self._state(chat, tg_id) for chat in chat_ids}
+        if found and all(state is None for state in found.values()):
+            raise MembershipUnavailable("ни один чат не прочитался")
+        return found
+
+    async def participants(self, chat_id: int) -> set[int]:
+        self.reads.append(chat_id)
+        if self.down or chat_id in self.broken:
+            raise MembershipUnavailable("нет связи")
+        return set(self.members) | set(self.chats.get(chat_id, set()))
+
+    def forget(self, chat_id: int) -> None:
+        self.forgotten.append(chat_id)
 
 
 # --- токены ---------------------------------------------------------------------------------
@@ -288,7 +318,9 @@ def test_project_and_users_endpoints(client):
     assert [u["name"] for u in client.get("/api/users").json()] == ["Артём"]
 
 
-def test_health_reports_state_without_secrets(client):
+def test_health_reports_state_without_secrets(client, monkeypatch):
+    monkeypatch.delenv("TG_CHAT_ID")  # здесь проверяем состояние «Telegram не настроен»
+    get_settings.cache_clear()
     body = client.get("/api/health").json()
     assert body["status"] == "ok" and body["database"] == "ok"
     assert body["telegram"] == {"bot": False, "userbot": False, "chat_configured": False}
@@ -298,59 +330,3 @@ def test_health_reports_state_without_secrets(client):
 def test_unknown_api_path_is_json_404_not_index_html(client):
     response = client.get("/api/nothing")
     assert response.status_code == 404 and response.json() == {"detail": "Не найдено"}
-
-
-# --- ежедневная проверка --------------------------------------------------------------------
-
-
-def _service(members: FakeMembership) -> TelegramService:
-    service = TelegramService(get_settings(), LoginTokenStore())
-    service.membership = members
-    return service
-
-
-async def _member(tg_id: int, name: str) -> int:
-    result = await flow.authenticate(
-        flow.TgProfile(tg_id, None, name), FakeMembership({tg_id}), get_settings()
-    )
-    return result.user_id
-
-
-def _age_checks(db, hours: int) -> None:
-    for user in db.scalars(select(models.User)):
-        user.membership_checked_at -= timedelta(hours=hours)
-    db.commit()
-
-
-async def test_daily_recheck_closes_access_of_those_who_left(db):
-    stayed, left = await _member(6001, "Остался"), await _member(6002, "Ушёл")
-    owner = await _member(OWNER_TG_ID, "Владелец")
-    await asyncio.to_thread(_age_checks, db, 25)
-    revoked = await _service(FakeMembership({6001})).recheck_members(timedelta(hours=24))
-    assert revoked == 1
-    db.expire_all()
-    assert db.get(models.User, left).access_revoked_at is not None
-    assert db.get(models.User, stayed).access_revoked_at is None
-    assert db.get(models.User, owner).access_revoked_at is None  # владельца не закрываем
-
-
-async def test_recheck_skips_fresh_checks_and_survives_telegram_outage(db):
-    user = await _member(6001, "Пока свой")
-    fresh = await _service(FakeMembership(set())).recheck_members(timedelta(hours=24))
-    assert fresh == 0
-    await asyncio.to_thread(_age_checks, db, 25)
-    outage = await _service(FakeMembership(down=True)).recheck_members(timedelta(hours=24))
-    assert outage == 0
-    db.expire_all()
-    assert db.get(models.User, user).access_revoked_at is None
-
-
-async def test_returning_member_gets_access_back_on_next_login(db):
-    user = await _member(6002, "Вернулся")
-    await asyncio.to_thread(_age_checks, db, 25)
-    await _service(FakeMembership(set())).recheck_members(timedelta(hours=24))
-    db.expire_all()
-    assert db.get(models.User, user).access_revoked_at is not None
-    again = await _member(6002, "Вернулся")
-    db.expire_all()
-    assert again == user and db.get(models.User, user).access_revoked_at is None

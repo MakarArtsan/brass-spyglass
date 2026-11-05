@@ -94,8 +94,8 @@ def service(monkeypatch):
 
 async def start(service):
     await service.start()
-    if service._recheck_task:
-        service._recheck_task.cancel()
+    if service._sync_task:
+        service._sync_task.cancel()
 
 
 async def test_a_good_session_connects_and_leaves_no_error(service):
