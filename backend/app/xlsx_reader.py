@@ -54,6 +54,7 @@ class SceneRow:
     priority: str | None
     due_date: date | None
     comment: str | None
+    side: str | None = None  # только из JSON-импорта: в Excel стороны нет
 
 
 @dataclass
@@ -73,6 +74,7 @@ class ShotRow:
     priority: str | None
     due_date: date | None
     comment: str | None
+    asset_states: dict[str, str] = field(default_factory=dict)  # код ассета → его состояние в шоте
 
 
 @dataclass
@@ -86,6 +88,7 @@ class AssetRow:
     priority: str | None
     due_date: date | None
     comment: str | None
+    side: str | None = None
 
 
 @dataclass

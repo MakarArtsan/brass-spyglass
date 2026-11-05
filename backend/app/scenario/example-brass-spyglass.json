@@ -1,0 +1,2270 @@
+{
+ "schema_version": "1.0",
+ "part": null,
+ "project": {
+  "title": "Битва при кривом зеркале",
+  "title_en": "The Brass Spyglass",
+  "logline": null,
+  "synopsis": null,
+  "language": "en",
+  "target_duration_sec": 360,
+  "sides": [
+   "Север",
+   "Юг"
+  ],
+  "motifs": [
+   {
+    "name": "Кривая труба врёт",
+    "description": null
+   },
+   {
+    "name": "Третий остров",
+    "description": null
+   },
+   {
+    "name": "Водная краска на овце",
+    "description": null
+   },
+   {
+    "name": "«Ma lord, ma lord!»",
+    "description": null
+   },
+   {
+    "name": "Накидывание подробностей",
+    "description": null
+   },
+   {
+    "name": "Барабан нарастает",
+    "description": null
+   },
+   {
+    "name": "Хобот из печной трубы",
+    "description": null
+   },
+   {
+    "name": "Средний осёл не в ногу",
+    "description": null
+   },
+   {
+    "name": "Медные тазы = золотые щиты",
+    "description": null
+   },
+   {
+    "name": "Туман",
+    "description": null
+   },
+   {
+    "name": "«Мы бедные, а они сияют»",
+    "description": null
+   },
+   {
+    "name": "Зеркальная симметрия",
+    "description": null
+   },
+   {
+    "name": "Дозорных угощают",
+    "description": null
+   }
+  ]
+ },
+ "characters": [
+  {
+   "code": "CH-01",
+   "name": "Дозорный Севера",
+   "name_en": null,
+   "kind": "Персонаж",
+   "side": null,
+   "description": "Полуслепой, корявый, с важным видом. Мерзкая родинка (у кого — решить).",
+   "appearance": null,
+   "states": [
+    {
+     "name": "Дозор",
+     "description": null
+    },
+    {
+     "name": "таверна (сытый)",
+     "description": null
+    },
+    {
+     "name": "финал за столом",
+     "description": null
+    }
+   ]
+  },
+  {
+   "code": "CH-02",
+   "name": "Дозорный Юга",
+   "name_en": null,
+   "kind": "Персонаж",
+   "side": null,
+   "description": "Полуслепой, корявый, с важным видом. Пара к CH-01, но отличим с первого взгляда.",
+   "appearance": null,
+   "states": [
+    {
+     "name": "Дозор",
+     "description": null
+    },
+    {
+     "name": "бег по городу",
+     "description": null
+    },
+    {
+     "name": "финал за столом",
+     "description": null
+    }
+   ]
+  },
+  {
+   "code": "CH-03",
+   "name": "Правитель Севера",
+   "name_en": null,
+   "kind": "Персонаж",
+   "side": null,
+   "description": "Дуэт «мелкий и крупный», не копия Астерикса и Обеликса.",
+   "appearance": null,
+   "states": [
+    {
+     "name": "Дворец",
+     "description": null
+    },
+    {
+     "name": "среди бутафории",
+     "description": null
+    },
+    {
+     "name": "флотилия",
+     "description": null
+    }
+   ]
+  },
+  {
+   "code": "CH-04",
+   "name": "Правитель Юга",
+   "name_en": null,
+   "kind": "Персонаж",
+   "side": null,
+   "description": "Вторая половина дуэта, контраст силуэта с CH-03.",
+   "appearance": null,
+   "states": [
+    {
+     "name": "Дворец",
+     "description": null
+    },
+    {
+     "name": "двор",
+     "description": null
+    },
+    {
+     "name": "флотилия",
+     "description": null
+    }
+   ]
+  },
+  {
+   "code": "CH-05",
+   "name": "Красильщик",
+   "name_en": null,
+   "kind": "Персонаж",
+   "side": null,
+   "description": "Неуклюжий ремесленник с руками в краске.",
+   "appearance": null,
+   "states": []
+  },
+  {
+   "code": "CH-06",
+   "name": "Глашатай",
+   "name_en": null,
+   "kind": "Персонаж",
+   "side": null,
+   "description": "Есть в списке персонажей сценария.",
+   "appearance": null,
+   "states": []
+  },
+  {
+   "code": "CH-07",
+   "name": "Мальчишки-бегуны",
+   "name_en": null,
+   "kind": "Массовка",
+   "side": null,
+   "description": "Группа 3–4 мальчишек.",
+   "appearance": null,
+   "states": []
+  },
+  {
+   "code": "CH-08",
+   "name": "Мальчишка-барабанщик",
+   "name_en": null,
+   "kind": "Персонаж",
+   "side": null,
+   "description": "Важен для финала: его смех ломает тишину.",
+   "appearance": null,
+   "states": [
+    {
+     "name": "Бодро",
+     "description": null
+    },
+    {
+     "name": "медленно",
+     "description": null
+    },
+    {
+     "name": "смеётся",
+     "description": null
+    }
+   ]
+  },
+  {
+   "code": "CH-09",
+   "name": "Слуги правителей",
+   "name_en": null,
+   "kind": "Массовка",
+   "side": null,
+   "description": null,
+   "appearance": null,
+   "states": []
+  },
+  {
+   "code": "CH-10",
+   "name": "Ремесленники",
+   "name_en": null,
+   "kind": "Массовка",
+   "side": null,
+   "description": "Безымянная толпа, строят бутафорию, работают в азарте.",
+   "appearance": null,
+   "states": []
+  },
+  {
+   "code": "CH-11",
+   "name": "Жители / слушатели в таверне",
+   "name_en": null,
+   "kind": "Массовка",
+   "side": null,
+   "description": null,
+   "appearance": null,
+   "states": [
+    {
+     "name": "Смеются днём",
+     "description": null
+    },
+    {
+     "name": "боятся вечером",
+     "description": null
+    }
+   ]
+  },
+  {
+   "code": "CH-12",
+   "name": "Старики и мальчишки на лодках",
+   "name_en": null,
+   "kind": "Массовка",
+   "side": null,
+   "description": "Держат тазы, зажимают морду овце.",
+   "appearance": null,
+   "states": []
+  },
+  {
+   "code": "CH-13",
+   "name": "Кузнецы",
+   "name_en": null,
+   "kind": "Массовка",
+   "side": null,
+   "description": null,
+   "appearance": null,
+   "states": []
+  },
+  {
+   "code": "AN-01",
+   "name": "Овца-«тигр»",
+   "name_en": null,
+   "kind": "Животное",
+   "side": null,
+   "description": "Главная овца фильма.",
+   "appearance": null,
+   "states": [
+    {
+     "name": "белая",
+     "description": null
+    },
+    {
+     "name": "в саже и краске",
+     "description": null
+    },
+    {
+     "name": "в оранжево-чёрных полосах",
+     "description": null
+    },
+    {
+     "name": "мокрая, краска смыта",
+     "description": null
+    }
+   ]
+  },
+  {
+   "code": "AN-02",
+   "name": "Стадо овец под тигров (Юг)",
+   "name_en": null,
+   "kind": "Животное",
+   "side": null,
+   "description": null,
+   "appearance": null,
+   "states": [
+    {
+     "name": "Белые",
+     "description": null
+    },
+    {
+     "name": "раскрашенные",
+     "description": null
+    },
+    {
+     "name": "на кораблях",
+     "description": null
+    }
+   ]
+  },
+  {
+   "code": "AN-03",
+   "name": "Три осла «слона» (Юг)",
+   "name_en": null,
+   "kind": "Животное",
+   "side": null,
+   "description": "Средний идёт не в ногу.",
+   "appearance": null,
+   "states": [
+    {
+     "name": "Под ковром",
+     "description": null
+    },
+    {
+     "name": "морда наружу, жуёт",
+     "description": null
+    }
+   ]
+  },
+  {
+   "code": "AN-04",
+   "name": "Ослы в доспехах из кастрюль (Север)",
+   "name_en": null,
+   "kind": "Животное",
+   "side": null,
+   "description": null,
+   "appearance": null,
+   "states": []
+  }
+ ],
+ "locations": [
+  {
+   "code": "LC-01",
+   "name": "Пролив между островами",
+   "description": null,
+   "states": [
+    {
+     "name": "День",
+     "description": null
+    },
+    {
+     "name": "туман ночью",
+     "description": null
+    },
+    {
+     "name": "рассвет",
+     "description": null
+    }
+   ]
+  },
+  {
+   "code": "LC-02",
+   "name": "Северный остров, стена-крепость",
+   "description": null,
+   "states": [
+    {
+     "name": "Через трубу богатый",
+     "description": null
+    },
+    {
+     "name": "без трубы бедный",
+     "description": null
+    }
+   ]
+  },
+  {
+   "code": "LC-03",
+   "name": "Южный остров, стена-крепость",
+   "description": null,
+   "states": [
+    {
+     "name": "Через трубу богатый",
+     "description": null
+    },
+    {
+     "name": "без трубы бедный",
+     "description": null
+    }
+   ]
+  },
+  {
+   "code": "LC-04",
+   "name": "Дворец Севера",
+   "description": null,
+   "states": []
+  },
+  {
+   "code": "LC-05",
+   "name": "Дворец Юга (медный купол)",
+   "description": null,
+   "states": []
+  },
+  {
+   "code": "LC-06",
+   "name": "Мастерская красильщика (Север)",
+   "description": "У стены.",
+   "states": []
+  },
+  {
+   "code": "LC-07",
+   "name": "Улицы Юга",
+   "description": "Маршрут бегущего дозорного.",
+   "states": []
+  },
+  {
+   "code": "LC-08",
+   "name": "Двор перед дворцом Юга",
+   "description": null,
+   "states": [
+    {
+     "name": "День",
+     "description": null
+    },
+    {
+     "name": "ночная сборка",
+     "description": null
+    }
+   ]
+  },
+  {
+   "code": "LC-09",
+   "name": "Набережная Юга",
+   "description": null,
+   "states": []
+  },
+  {
+   "code": "LC-10",
+   "name": "Таверна Севера",
+   "description": null,
+   "states": []
+  },
+  {
+   "code": "LC-11",
+   "name": "Крыши Севера",
+   "description": null,
+   "states": []
+  },
+  {
+   "code": "LC-12",
+   "name": "Кузница Севера",
+   "description": null,
+   "states": []
+  },
+  {
+   "code": "LC-13",
+   "name": "Переулки (оба города)",
+   "description": null,
+   "states": [
+    {
+     "name": "Сумерки",
+     "description": null
+    }
+   ]
+  },
+  {
+   "code": "LC-14",
+   "name": "Третий остров (силуэт)",
+   "description": "Крошечный силуэт на горизонте.",
+   "states": [
+    {
+     "name": "Едва заметен в 1",
+     "description": null
+    },
+    {
+     "name": "явный в трубе в 12",
+     "description": null
+    }
+   ]
+  }
+ ],
+ "assets": [
+  {
+   "code": "PR-01",
+   "type": "Реквизит",
+   "name": "Кривая медная подзорная труба",
+   "description": "Огромная, медная, главный артефакт фильма.",
+   "states": [
+    {
+     "name": "Одинаковые у обоих дозорных или разные — решить",
+     "description": null
+    }
+   ]
+  },
+  {
+   "code": "PR-02",
+   "type": "Реквизит",
+   "name": "Трубы правителей",
+   "description": "Богаче дозорных, такие же кривые.",
+   "states": []
+  },
+  {
+   "code": "PR-03",
+   "type": "Реквизит",
+   "name": "Чан с оранжевой водной краской",
+   "description": null,
+   "states": [
+    {
+     "name": "Полный",
+     "description": null
+    },
+    {
+     "name": "опрокинут",
+     "description": null
+    }
+   ]
+  },
+  {
+   "code": "PR-04",
+   "type": "Реквизит",
+   "name": "Золотая ткань",
+   "description": "Прикрывает дыры в стенах.",
+   "states": []
+  },
+  {
+   "code": "PR-05",
+   "type": "Бутафория",
+   "name": "«Бронированный слон»",
+   "description": "Три осла, огромный ковёр, печные трубы как бивни, хобот из печной трубы.",
+   "states": [
+    {
+     "name": "Сборка",
+     "description": null
+    },
+    {
+     "name": "собран, на ходу",
+     "description": null
+    },
+    {
+     "name": "на палубе",
+     "description": null
+    },
+    {
+     "name": "хобот отвалился",
+     "description": null
+    }
+   ]
+  },
+  {
+   "code": "PR-06",
+   "type": "Реквизит",
+   "name": "Медные тазы — «золотые щиты»",
+   "description": "Бабушкины тазы на палках.",
+   "states": [
+    {
+     "name": "На крышах",
+     "description": null
+    },
+    {
+     "name": "в руках на лодках",
+     "description": null
+    },
+    {
+     "name": "летят в воду",
+     "description": null
+    }
+   ]
+  },
+  {
+   "code": "PR-08",
+   "type": "Бутафория",
+   "name": "Картонные великаны на ходулях (Юг)",
+   "description": null,
+   "states": [
+    {
+     "name": "Вблизи картон",
+     "description": null
+    },
+    {
+     "name": "через трубу живые",
+     "description": null
+    }
+   ]
+  },
+  {
+   "code": "PR-09",
+   "type": "Бутафория",
+   "name": "Чучела на подставках (Север)",
+   "description": "Образец: балийский Ньепи (огох-огох).",
+   "states": [
+    {
+     "name": "На берегу",
+     "description": null
+    },
+    {
+     "name": "на носах кораблей",
+     "description": null
+    }
+   ]
+  },
+  {
+   "code": "PR-10",
+   "type": "Бутафория",
+   "name": "Брёвна-пушки (Юг)",
+   "description": "Брёвна, раскрашенные под пушки.",
+   "states": []
+  },
+  {
+   "code": "PR-11",
+   "type": "Бутафория",
+   "name": "Бочки и колёса-«колесницы» (Север)",
+   "description": "Гремят как колесницы.",
+   "states": []
+  },
+  {
+   "code": "PR-12",
+   "type": "Бутафория",
+   "name": "Доспехи из кастрюль",
+   "description": "На ослах Севера.",
+   "states": []
+  },
+  {
+   "code": "PR-13",
+   "type": "Реквизит",
+   "name": "Картонные и деревянные мечи",
+   "description": null,
+   "states": [
+    {
+     "name": "Целый",
+     "description": null
+    },
+    {
+     "name": "гнётся",
+     "description": null
+    }
+   ]
+  },
+  {
+   "code": "PR-14",
+   "type": "Реквизит",
+   "name": "Барабан",
+   "description": null,
+   "states": []
+  },
+  {
+   "code": "PR-15",
+   "type": "Реквизит",
+   "name": "Еда: угощения, лепёшки, фрукты, кувшины",
+   "description": null,
+   "states": [
+    {
+     "name": "Таверна",
+     "description": null
+    },
+    {
+     "name": "финальный стол",
+     "description": null
+    }
+   ]
+  },
+  {
+   "code": "PR-16",
+   "type": "Реквизит",
+   "name": "Сохнущее бельё, заплатки",
+   "description": "Сет-дрессинг бедности.",
+   "states": []
+  },
+  {
+   "code": "SH-01",
+   "type": "Транспорт",
+   "name": "Флотилия Севера",
+   "description": "Чучела на носах.",
+   "states": [
+    {
+     "name": "В тумане",
+     "description": null
+    },
+    {
+     "name": "нос в нос",
+     "description": null
+    },
+    {
+     "name": "в базаре",
+     "description": null
+    }
+   ]
+  },
+  {
+   "code": "SH-02",
+   "type": "Транспорт",
+   "name": "Флотилия Юга",
+   "description": "Слон на палубе, овцы-тигры.",
+   "states": [
+    {
+     "name": "В тумане",
+     "description": null
+    },
+    {
+     "name": "нос в нос",
+     "description": null
+    },
+    {
+     "name": "в базаре",
+     "description": null
+    }
+   ]
+  },
+  {
+   "code": "SH-03",
+   "type": "Транспорт",
+   "name": "Плавучий базар из сотен лодок",
+   "description": null,
+   "states": []
+  },
+  {
+   "code": "EF-01",
+   "type": "Эффект / среда",
+   "name": "Туман над проливом",
+   "description": null,
+   "states": [
+    {
+     "name": "Густой",
+     "description": null
+    },
+    {
+     "name": "уходит с порывом ветра",
+     "description": null
+    }
+   ]
+  },
+  {
+   "code": "EF-02",
+   "type": "Эффект / среда",
+   "name": "Чёрный дым (солома с перцем)",
+   "description": null,
+   "states": []
+  },
+  {
+   "code": "EF-04",
+   "type": "Эффект / среда",
+   "name": "Рассвет / солнце",
+   "description": null,
+   "states": []
+  },
+  {
+   "code": "EF-05",
+   "type": "Эффект / среда",
+   "name": "Брызги от удара бортов",
+   "description": null,
+   "states": []
+  },
+  {
+   "code": "ST-01",
+   "type": "Стиль / лук",
+   "name": "Лук «через трубу» vs «без трубы»",
+   "description": "Через трубу: золото, богато, страшно, искажение линзы. Без трубы: бедно и смешно.",
+   "states": [
+    {
+     "name": "Палитра Севера",
+     "description": null
+    },
+    {
+     "name": "палитра Юга",
+     "description": null
+    }
+   ]
+  }
+ ],
+ "scenes": [
+  {
+   "number": 1,
+   "title": "Два зеркала",
+   "location_codes": [
+    "LC-01",
+    "LC-02",
+    "LC-03",
+    "LC-14"
+   ],
+   "time_of_day": "Утро",
+   "planned_sec": 25.0,
+   "summary": null,
+   "meaning": "Главная шутка: труба искажает. Оба берега бедные.",
+   "side": null,
+   "intensity": 0,
+   "cut_notes": "Не трогать: здесь сетап третьего острова",
+   "source_ref": null,
+   "shots": [
+    {
+     "description": "Симметричный общий: два острова, пролив, на каждом стена-крепость",
+     "size": "Общий",
+     "camera": "Статика / медленный наезд",
+     "duration_sec": 6.0,
+     "asset_codes": [
+      "LC-01",
+      "LC-02",
+      "LC-03"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": "Ветер, чайки",
+     "notes": null
+    },
+    {
+     "description": "Дозорный Севера на стене поднимает огромную медную трубу",
+     "size": "Средний",
+     "camera": "Статика",
+     "duration_sec": 3.0,
+     "asset_codes": [
+      "CH-01",
+      "PR-01",
+      "LC-02"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": "Скрип трубы",
+     "notes": null
+    },
+    {
+     "description": "Дозорный Юга зеркально поднимает свою трубу",
+     "size": "Средний",
+     "camera": "Статика, зеркально 1.2",
+     "duration_sec": 3.0,
+     "asset_codes": [
+      "CH-02",
+      "PR-01",
+      "LC-03"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": "Скрип трубы",
+     "notes": null
+    },
+    {
+     "description": "Через трубу: золотые купола, знамёна, богатый город",
+     "size": "POV",
+     "camera": "Плавный проход",
+     "duration_sec": 4.0,
+     "asset_codes": [
+      "ST-01",
+      "LC-02"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": null,
+     "notes": null
+    },
+    {
+     "description": "Без трубы: заплатки на крышах, облупленная штукатурка, бельё",
+     "size": "Общий",
+     "camera": "Тот же ракурс, что 1.4",
+     "duration_sec": 4.0,
+     "asset_codes": [
+      "LC-02",
+      "PR-16"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": null,
+     "notes": null
+    },
+    {
+     "description": "Дозорные смотрят друг на друга; на краю горизонта мелькает силуэт третьего острова",
+     "size": "Общий",
+     "camera": "Статика",
+     "duration_sec": 5.0,
+     "asset_codes": [
+      "CH-01",
+      "CH-02",
+      "LC-14"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": null,
+     "notes": null
+    }
+   ]
+  },
+  {
+   "number": 2,
+   "title": "Блеф как политика",
+   "location_codes": [
+    "LC-04",
+    "LC-05"
+   ],
+   "time_of_day": "День",
+   "planned_sec": 30.0,
+   "summary": null,
+   "meaning": "Каждый уверен, что блефует только он. Мотор фильма.",
+   "side": null,
+   "intensity": 0,
+   "cut_notes": "До 4 мин: склеить со сц. 3",
+   "source_ref": null,
+   "shots": [
+    {
+     "description": "Правитель Севера смотрит в трубу на соседа и вздыхает",
+     "size": "Средний",
+     "camera": "Статика",
+     "duration_sec": 5.0,
+     "asset_codes": [
+      "CH-03",
+      "PR-02",
+      "LC-04"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": null,
+     "notes": null
+    },
+    {
+     "description": "Правитель Юга зеркально",
+     "size": "Средний",
+     "camera": "Зеркально 2.1",
+     "duration_sec": 5.0,
+     "asset_codes": [
+      "CH-04",
+      "PR-02",
+      "LC-05"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": null,
+     "notes": null
+    },
+    {
+     "description": "Слуги закрывают дыры в стене золотой тканью",
+     "size": "Средний",
+     "camera": "Панорама",
+     "duration_sec": 4.0,
+     "asset_codes": [
+      "CH-09",
+      "PR-04",
+      "LC-04"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": null,
+     "notes": null
+    },
+    {
+     "description": "Слуги натирают рукавами медный купол",
+     "size": "Средний",
+     "camera": "Панорама",
+     "duration_sec": 4.0,
+     "asset_codes": [
+      "CH-09",
+      "LC-05"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": null,
+     "notes": null
+    },
+    {
+     "description": "Правитель Севера: реплика",
+     "size": "Крупный",
+     "camera": "Статика",
+     "duration_sec": 6.0,
+     "asset_codes": [
+      "CH-03",
+      "LC-04"
+     ],
+     "asset_states": {},
+     "dialogue": [
+      {
+       "character": "CH-03",
+       "speaker": null,
+       "text": "We are poor. But they? Look how they shine!",
+       "translation": "Мы-то бедные. А они? Смотри, как сияют!"
+      }
+     ],
+     "sfx": "We are poor. But they? Look how they shine!",
+     "notes": null
+    },
+    {
+     "description": "Правитель Юга: та же реплика зеркально",
+     "size": "Крупный",
+     "camera": "Зеркально 2.5",
+     "duration_sec": 6.0,
+     "asset_codes": [
+      "CH-04",
+      "LC-05"
+     ],
+     "asset_states": {},
+     "dialogue": [
+      {
+       "character": "CH-04",
+       "speaker": null,
+       "text": "We are poor. But they? Look how they shine!",
+       "translation": "Мы-то бедные. А они? Смотри, как сияют!"
+      }
+     ],
+     "sfx": "We are poor. But they? Look how they shine!",
+     "notes": null
+    }
+   ]
+  },
+  {
+   "number": 3,
+   "title": "Овца",
+   "location_codes": [
+    "LC-06",
+    "LC-02"
+   ],
+   "time_of_day": "Рассвет",
+   "planned_sec": 25.0,
+   "summary": null,
+   "meaning": "Рождение «тигра». Краска водная (сетап к сц. 11).",
+   "side": null,
+   "intensity": 0,
+   "cut_notes": "До 4 мин: склеить со сц. 2",
+   "source_ref": null,
+   "shots": [
+    {
+     "description": "Мастерская красильщика у стены, овца у чана",
+     "size": "Общий",
+     "camera": "Статика",
+     "duration_sec": 5.0,
+     "asset_codes": [
+      "CH-05",
+      "AN-01",
+      "PR-03",
+      "LC-06"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": null,
+     "notes": null
+    },
+    {
+     "description": "Красильщик спотыкается, чан с оранжевой краской опрокидывается",
+     "size": "Средний",
+     "camera": "Ручная камера",
+     "duration_sec": 4.0,
+     "asset_codes": [
+      "CH-05",
+      "PR-03",
+      "LC-06"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": "Грохот, плеск",
+     "notes": null
+    },
+    {
+     "description": "Овца в саже и жидкой краске выскакивает (видно, что краска водная, капает)",
+     "size": "Средний",
+     "camera": "Следим за овцой",
+     "duration_sec": 4.0,
+     "asset_codes": [
+      "AN-01",
+      "PR-03"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": "Блеяние",
+     "notes": null
+    },
+    {
+     "description": "Овца несётся по ступеням на стену",
+     "size": "Средний",
+     "camera": "Проводка",
+     "duration_sec": 4.0,
+     "asset_codes": [
+      "AN-01",
+      "LC-02"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": null,
+     "notes": null
+    },
+    {
+     "description": "Полосатая овца в героической позе на фоне рассвета",
+     "size": "Общий",
+     "camera": "Нижний ракурс, статика",
+     "duration_sec": 8.0,
+     "asset_codes": [
+      "AN-01",
+      "EF-04",
+      "LC-02"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": "Пауза",
+     "notes": null
+    }
+   ]
+  },
+  {
+   "number": 4,
+   "title": "Тигр",
+   "location_codes": [
+    "LC-03",
+    "LC-07",
+    "LC-05"
+   ],
+   "time_of_day": "Утро",
+   "planned_sec": 30.0,
+   "summary": null,
+   "meaning": "Дозорный накидывает подробности, никто не проверяет.",
+   "side": null,
+   "intensity": 1,
+   "cut_notes": "До 3 мин: сц. 1–4 одним блоком «тигр»",
+   "source_ref": null,
+   "shots": [
+    {
+     "description": "Дозорный Юга щурится в кривую трубу",
+     "size": "Крупный",
+     "camera": "Статика",
+     "duration_sec": 3.0,
+     "asset_codes": [
+      "CH-02",
+      "PR-01",
+      "LC-03"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": null,
+     "notes": null
+    },
+    {
+     "description": "Через трубу: полосатая овца выглядит саблезубым тигром",
+     "size": "POV",
+     "camera": "Искажение линзы",
+     "duration_sec": 4.0,
+     "asset_codes": [
+      "AN-01",
+      "ST-01"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": null,
+     "notes": null
+    },
+    {
+     "description": "Дозорный бежит по городу",
+     "size": "Общий",
+     "camera": "Проводка",
+     "duration_sec": 6.0,
+     "asset_codes": [
+      "CH-02",
+      "LC-07"
+     ],
+     "asset_states": {},
+     "dialogue": [
+      {
+       "character": "CH-02",
+       "speaker": null,
+       "text": "Ma lord, ma lord! The North has TIGERS!",
+       "translation": "Милорд, милорд! У Севера ТИГРЫ!"
+      }
+     ],
+     "sfx": "Ma lord, ma lord! The North has TIGERS!",
+     "notes": null
+    },
+    {
+     "description": "На бегу добавляет подробности",
+     "size": "Средний",
+     "camera": "Проводка",
+     "duration_sec": 6.0,
+     "asset_codes": [
+      "CH-02",
+      "LC-07"
+     ],
+     "asset_states": {},
+     "dialogue": [
+      {
+       "character": "CH-02",
+       "speaker": null,
+       "text": "Many. Angry. One with a tail.",
+       "translation": "Много. Злые. Один с хвостом."
+      }
+     ],
+     "sfx": "Many. Angry. One with a tail.",
+     "notes": null
+    },
+    {
+     "description": "Влетает во дворец, падает к ногам правителя Юга",
+     "size": "Средний",
+     "camera": "Статика",
+     "duration_sec": 5.0,
+     "asset_codes": [
+      "CH-02",
+      "CH-04",
+      "LC-05"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": null,
+     "notes": null
+    },
+    {
+     "description": "Правитель Юга, пауза, реакция",
+     "size": "Крупный",
+     "camera": "Статика",
+     "duration_sec": 6.0,
+     "asset_codes": [
+      "CH-04",
+      "LC-05"
+     ],
+     "asset_states": {},
+     "dialogue": [
+      {
+       "character": "CH-04",
+       "speaker": null,
+       "text": "We have no tigers.",
+       "translation": "У нас нет тигров."
+      }
+     ],
+     "sfx": "We have no tigers.",
+     "notes": null
+    }
+   ]
+  },
+  {
+   "number": 5,
+   "title": "Юг отвечает: слон",
+   "location_codes": [
+    "LC-08",
+    "LC-09"
+   ],
+   "time_of_day": "Ночь → утро",
+   "planned_sec": 30.0,
+   "summary": null,
+   "meaning": "Первый ответный фейк.",
+   "side": null,
+   "intensity": 2,
+   "cut_notes": "До 4 мин: склеить со сц. 6",
+   "source_ref": null,
+   "shots": [
+    {
+     "description": "Правитель Юга собирает ремесленников, задача «за ночь»",
+     "size": "Общий",
+     "camera": "Статика",
+     "duration_sec": 6.0,
+     "asset_codes": [
+      "CH-04",
+      "CH-10",
+      "LC-08"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": null,
+     "notes": null
+    },
+    {
+     "description": "Ночная сборка: три осла в ряд, ковёр, печные трубы-бивни",
+     "size": "Средний",
+     "camera": "Монтажная нарезка",
+     "duration_sec": 8.0,
+     "asset_codes": [
+      "CH-10",
+      "AN-03",
+      "PR-05",
+      "LC-08"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": "Стук, ругань",
+     "notes": null
+    },
+    {
+     "description": "Утро: «бронированный слон» шагает по набережной",
+     "size": "Общий",
+     "camera": "Сбоку, проводка",
+     "duration_sec": 6.0,
+     "asset_codes": [
+      "PR-05",
+      "AN-03",
+      "LC-09"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": "Тяжёлые шаги",
+     "notes": null
+    },
+    {
+     "description": "Деталь: средний осёл не в ногу, слон переступает рывками",
+     "size": "Деталь",
+     "camera": "Низко, по ногам",
+     "duration_sec": 5.0,
+     "asset_codes": [
+      "AN-03",
+      "PR-05"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": null,
+     "notes": null
+    },
+    {
+     "description": "Правитель Юга доволен",
+     "size": "Крупный",
+     "camera": "Статика",
+     "duration_sec": 5.0,
+     "asset_codes": [
+      "CH-04",
+      "LC-09"
+     ],
+     "asset_states": {},
+     "dialogue": [
+      {
+       "character": "CH-04",
+       "speaker": null,
+       "text": "Terror. But affordable.",
+       "translation": "Ужас. Но недорого."
+      }
+     ],
+     "sfx": "Terror. But affordable.",
+     "notes": null
+    }
+   ]
+  },
+  {
+   "number": 6,
+   "title": "Север отвечает",
+   "location_codes": [
+    "LC-10",
+    "LC-04",
+    "LC-11",
+    "LC-12"
+   ],
+   "time_of_day": "День → вечер",
+   "planned_sec": 30.0,
+   "summary": null,
+   "meaning": "Эскалация: подробностей больше, ответ дороже.",
+   "side": null,
+   "intensity": 2,
+   "cut_notes": "До 4 мин: склеить со сц. 5",
+   "source_ref": null,
+   "shots": [
+    {
+     "description": "Дозорный Севера в трубу видит «слона»",
+     "size": "POV",
+     "camera": "Искажение линзы",
+     "duration_sec": 4.0,
+     "asset_codes": [
+      "CH-01",
+      "PR-01",
+      "PR-05",
+      "ST-01"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": null,
+     "notes": null
+    },
+    {
+     "description": "Таверна: его угощают, он рассказывает",
+     "size": "Средний",
+     "camera": "Медленный наезд",
+     "duration_sec": 8.0,
+     "asset_codes": [
+      "CH-01",
+      "CH-11",
+      "PR-15",
+      "LC-10"
+     ],
+     "asset_states": {},
+     "dialogue": [
+      {
+       "character": "CH-01",
+       "speaker": null,
+       "text": "A hundred elephants. They breathe fire.",
+       "translation": "Сто слонов. Дышат огнём."
+      }
+     ],
+     "sfx": "A hundred elephants. They breathe fire.",
+     "notes": null
+    },
+    {
+     "description": "Слушатели в ужасе несут ещё угощения",
+     "size": "Средний",
+     "camera": "Статика",
+     "duration_sec": 4.0,
+     "asset_codes": [
+      "CH-11",
+      "PR-15",
+      "LC-10"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": null,
+     "notes": null
+    },
+    {
+     "description": "Правитель Севера отдаёт приказ",
+     "size": "Крупный",
+     "camera": "Статика",
+     "duration_sec": 5.0,
+     "asset_codes": [
+      "CH-03",
+      "LC-04"
+     ],
+     "asset_states": {},
+     "dialogue": [
+      {
+       "character": "CH-03",
+       "speaker": null,
+       "text": "A thousand soldiers. By morning.",
+       "translation": "Тысячу солдат. К утру."
+      }
+     ],
+     "sfx": "A thousand soldiers. By morning.",
+     "notes": null
+    },
+    {
+     "description": "Крыши: палки с медными тазами — «золотые щиты»",
+     "size": "Общий",
+     "camera": "Панорама по крышам",
+     "duration_sec": 5.0,
+     "asset_codes": [
+      "PR-06",
+      "LC-11"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": null,
+     "notes": null
+    },
+    {
+     "description": "Кузница: сырая солома с перцем, чёрный дым, кузнецы чихают",
+     "size": "Средний",
+     "camera": "Статика",
+     "duration_sec": 4.0,
+     "asset_codes": [
+      "CH-13",
+      "EF-02",
+      "LC-12"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": "Чихание",
+     "notes": null
+    }
+   ]
+  },
+  {
+   "number": 7,
+   "title": "Гонка бутафории (монтаж)",
+   "location_codes": [
+    "LC-03",
+    "LC-02"
+   ],
+   "time_of_day": "День",
+   "planned_sec": 40.0,
+   "summary": null,
+   "meaning": "Каждая выдумка нелепее. Барабаны нарастают.",
+   "side": null,
+   "intensity": 5,
+   "cut_notes": "До 4 мин: две пары вместо трёх",
+   "source_ref": null,
+   "shots": [
+    {
+     "description": "Юг: картонные великаны на ходулях",
+     "size": "Общий",
+     "camera": "Динамика",
+     "duration_sec": 7.0,
+     "asset_codes": [
+      "PR-08",
+      "CH-10",
+      "LC-03"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": "Барабаны ↑",
+     "notes": null
+    },
+    {
+     "description": "Север: огромные чучела на подставках (Ньепи)",
+     "size": "Общий",
+     "camera": "Динамика",
+     "duration_sec": 7.0,
+     "asset_codes": [
+      "PR-09",
+      "CH-10",
+      "LC-02"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": "Барабаны ↑",
+     "notes": null
+    },
+    {
+     "description": "Юг: брёвна, раскрашенные под пушки",
+     "size": "Средний",
+     "camera": "Динамика",
+     "duration_sec": 6.0,
+     "asset_codes": [
+      "PR-10",
+      "CH-10"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": "Барабаны ↑",
+     "notes": null
+    },
+    {
+     "description": "Север: бочки и колёса гремят как колесницы",
+     "size": "Средний",
+     "camera": "Динамика",
+     "duration_sec": 6.0,
+     "asset_codes": [
+      "PR-11",
+      "CH-10"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": "Грохот, барабаны ↑",
+     "notes": null
+    },
+    {
+     "description": "Юг: стадо овец раскрашивают под тигров; правитель Юга кивает",
+     "size": "Средний",
+     "camera": "Динамика",
+     "duration_sec": 7.0,
+     "asset_codes": [
+      "AN-02",
+      "CH-04",
+      "CH-08"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": "Барабаны ↑ (ввести барабанщика)",
+     "notes": null
+    },
+    {
+     "description": "Север: ослы в доспехах из кастрюль; правитель Севера кивает",
+     "size": "Средний",
+     "camera": "Динамика",
+     "duration_sec": 7.0,
+     "asset_codes": [
+      "AN-04",
+      "PR-12",
+      "CH-03"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": "Барабаны ↑",
+     "notes": null
+    }
+   ]
+  },
+  {
+   "number": 8,
+   "title": "Смех становится страхом",
+   "location_codes": [
+    "LC-02",
+    "LC-13",
+    "LC-03"
+   ],
+   "time_of_day": "Сумерки",
+   "planned_sec": 30.0,
+   "summary": null,
+   "meaning": "Фейк работает против своих создателей.",
+   "side": null,
+   "intensity": 3,
+   "cut_notes": "До 4 мин: склеить со сц. 9",
+   "source_ref": null,
+   "shots": [
+    {
+     "description": "Сумерки, стена Севера: жители смотрят в трубы",
+     "size": "Общий",
+     "camera": "Статика",
+     "duration_sec": 5.0,
+     "asset_codes": [
+      "CH-11",
+      "PR-01",
+      "LC-02"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": null,
+     "notes": null
+    },
+    {
+     "description": "Через трубу: чужие великаны и тигры выглядят живыми",
+     "size": "POV",
+     "camera": "Искажение линзы",
+     "duration_sec": 6.0,
+     "asset_codes": [
+      "PR-08",
+      "AN-02",
+      "ST-01"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": null,
+     "notes": null
+    },
+    {
+     "description": "Деталь: свой картонный меч гнётся в руке",
+     "size": "Деталь",
+     "camera": "Статика",
+     "duration_sec": 4.0,
+     "asset_codes": [
+      "PR-13"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": null,
+     "notes": null
+    },
+    {
+     "description": "Мальчишки-бегуны по переулкам",
+     "size": "Средний",
+     "camera": "Проводка",
+     "duration_sec": 6.0,
+     "asset_codes": [
+      "CH-07",
+      "LC-13"
+     ],
+     "asset_states": {},
+     "dialogue": [
+      {
+       "character": "CH-07",
+       "speaker": null,
+       "text": "Attack at dawn!",
+       "translation": "Штурм на рассвете!"
+      }
+     ],
+     "sfx": "Attack at dawn!",
+     "notes": null
+    },
+    {
+     "description": "Юг зеркально: испуганные лица на стене",
+     "size": "Средний",
+     "camera": "Статика",
+     "duration_sec": 5.0,
+     "asset_codes": [
+      "CH-11",
+      "LC-03"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": "Барабан реже, глуше",
+     "notes": null
+    },
+    {
+     "description": "Мальчишка-барабанщик бьёт медленно",
+     "size": "Крупный",
+     "camera": "Статика",
+     "duration_sec": 4.0,
+     "asset_codes": [
+      "CH-08",
+      "PR-14"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": "Барабан реже, глуше",
+     "notes": null
+    }
+   ]
+  },
+  {
+   "number": 9,
+   "title": "Решение правителей",
+   "location_codes": [
+    "LC-04",
+    "LC-05"
+   ],
+   "time_of_day": "Вечер",
+   "planned_sec": 30.0,
+   "summary": null,
+   "meaning": "Ставка на туман. Встречу флотилий никто не предвидит.",
+   "side": null,
+   "intensity": 3,
+   "cut_notes": "До 4 мин: склеить со сц. 8",
+   "source_ref": null,
+   "shots": [
+    {
+     "description": "Правитель Севера один среди бутафории: воевать нечем",
+     "size": "Средний",
+     "camera": "Медленный отъезд",
+     "duration_sec": 6.0,
+     "asset_codes": [
+      "CH-03",
+      "PR-09",
+      "PR-12"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": null,
+     "notes": null
+    },
+    {
+     "description": "Правитель Юга зеркально",
+     "size": "Средний",
+     "camera": "Зеркально 9.1",
+     "duration_sec": 6.0,
+     "asset_codes": [
+      "CH-04",
+      "PR-05",
+      "PR-08"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": null,
+     "notes": null
+    },
+    {
+     "description": "Оба смотрят на туман над проливом",
+     "size": "Сплит",
+     "camera": "Статика",
+     "duration_sec": 6.0,
+     "asset_codes": [
+      "CH-03",
+      "CH-04",
+      "EF-01"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": null,
+     "notes": null
+    },
+    {
+     "description": "Правитель Севера",
+     "size": "Крупный",
+     "camera": "Статика",
+     "duration_sec": 6.0,
+     "asset_codes": [
+      "CH-03",
+      "LC-04"
+     ],
+     "asset_states": {},
+     "dialogue": [
+      {
+       "character": "CH-03",
+       "speaker": null,
+       "text": "In the fog, a donkey is a dragon.",
+       "translation": "В тумане осёл как дракон."
+      }
+     ],
+     "sfx": "In the fog, a donkey is a dragon.",
+     "notes": null
+    },
+    {
+     "description": "Правитель Юга",
+     "size": "Крупный",
+     "camera": "Статика",
+     "duration_sec": 6.0,
+     "asset_codes": [
+      "CH-04",
+      "LC-05"
+     ],
+     "asset_states": {},
+     "dialogue": [
+      {
+       "character": "CH-04",
+       "speaker": null,
+       "text": "In the fog, a donkey is a dragon.",
+       "translation": "В тумане осёл как дракон."
+      }
+     ],
+     "sfx": "In the fog, a donkey is a dragon.",
+     "notes": null
+    }
+   ]
+  },
+  {
+   "number": 10,
+   "title": "Ночь, туман",
+   "location_codes": [
+    "LC-01"
+   ],
+   "time_of_day": "Ночь",
+   "planned_sec": 30.0,
+   "summary": null,
+   "meaning": "Саспенс. Юмор только в деталях.",
+   "side": null,
+   "intensity": 4,
+   "cut_notes": "До 4 мин: склеить со сц. 11",
+   "source_ref": null,
+   "shots": [
+    {
+     "description": "Туман над проливом, тишина",
+     "size": "Общий",
+     "camera": "Статика",
+     "duration_sec": 5.0,
+     "asset_codes": [
+      "LC-01",
+      "EF-01"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": "Вода, тишина",
+     "notes": null
+    },
+    {
+     "description": "Флотилия Севера выходит из тумана: чучела на носах",
+     "size": "Общий",
+     "camera": "Медленный наезд",
+     "duration_sec": 6.0,
+     "asset_codes": [
+      "SH-01",
+      "PR-09",
+      "PR-06",
+      "EF-01"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": null,
+     "notes": null
+    },
+    {
+     "description": "Флотилия Юга: овцы-тигры, слон на палубе",
+     "size": "Общий",
+     "camera": "Медленный наезд",
+     "duration_sec": 6.0,
+     "asset_codes": [
+      "SH-02",
+      "AN-02",
+      "PR-05",
+      "EF-01"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": null,
+     "notes": null
+    },
+    {
+     "description": "Старики и мальчишки прижимают тазы, чтобы не гремели",
+     "size": "Средний",
+     "camera": "Статика",
+     "duration_sec": 4.0,
+     "asset_codes": [
+      "CH-12",
+      "PR-06"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": null,
+     "notes": null
+    },
+    {
+     "description": "Овца блеет, ей зажимают морду",
+     "size": "Крупный",
+     "camera": "Статика",
+     "duration_sec": 4.0,
+     "asset_codes": [
+      "AN-02",
+      "CH-12"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": "Блеяние",
+     "notes": null
+    },
+    {
+     "description": "Дозорные на стенах щурятся в туман; течение сносит корабли",
+     "size": "Общий",
+     "camera": "Статика",
+     "duration_sec": 5.0,
+     "asset_codes": [
+      "CH-01",
+      "CH-02",
+      "PR-01",
+      "EF-01"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": null,
+     "notes": null
+    }
+   ]
+  },
+  {
+   "number": 11,
+   "title": "Кривое зеркало",
+   "location_codes": [
+    "LC-01"
+   ],
+   "time_of_day": "Рассвет",
+   "planned_sec": 40.0,
+   "summary": null,
+   "meaning": "Момент истины. Буквальное зеркало страха и тщеславия.",
+   "side": null,
+   "intensity": 5,
+   "cut_notes": "Не сокращать паузу в 10 сек",
+   "source_ref": null,
+   "shots": [
+    {
+     "description": "Корабли глухо упираются нос в нос (симметрия как в 1.1)",
+     "size": "Общий",
+     "camera": "Статика сверху",
+     "duration_sec": 4.0,
+     "asset_codes": [
+      "SH-01",
+      "SH-02",
+      "LC-01"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": "Глухой удар",
+     "notes": null
+    },
+    {
+     "description": "Порыв ветра, туман уходит, встаёт солнце",
+     "size": "Общий",
+     "camera": "Статика",
+     "duration_sec": 5.0,
+     "asset_codes": [
+      "EF-01",
+      "EF-04",
+      "LC-01"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": "Ветер",
+     "notes": null
+    },
+    {
+     "description": "У «слона» отваливается хобот, из-под ковра морда жующего осла",
+     "size": "Средний",
+     "camera": "Статика",
+     "duration_sec": 5.0,
+     "asset_codes": [
+      "PR-05",
+      "AN-03"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": null,
+     "notes": null
+    },
+    {
+     "description": "Брызги смывают краску с «тигра», мокрая овца жалобно блеет",
+     "size": "Средний",
+     "camera": "Статика",
+     "duration_sec": 5.0,
+     "asset_codes": [
+      "AN-01",
+      "EF-05"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": "Блеяние",
+     "notes": null
+    },
+    {
+     "description": "«Золотые» воины с бабушкиными тазами и деревянными мечами",
+     "size": "Средний",
+     "camera": "Панорама",
+     "duration_sec": 4.0,
+     "asset_codes": [
+      "PR-06",
+      "PR-13",
+      "CH-12"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": null,
+     "notes": null
+    },
+    {
+     "description": "10 секунд тишины: лица обеих флотилий",
+     "size": "Сплит",
+     "camera": "Статика",
+     "duration_sec": 10.0,
+     "asset_codes": [
+      "CH-03",
+      "CH-04",
+      "CH-11"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": "Тишина, барабан молчит",
+     "notes": null
+    },
+    {
+     "description": "Мальчишка-барабанщик не выдерживает и смеётся",
+     "size": "Крупный",
+     "camera": "Статика",
+     "duration_sec": 7.0,
+     "asset_codes": [
+      "CH-08",
+      "PR-14"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": "Смех",
+     "notes": null
+    }
+   ]
+  },
+  {
+   "number": 12,
+   "title": "Мост из лодок и кода",
+   "location_codes": [
+    "LC-14"
+   ],
+   "time_of_day": "Утро",
+   "planned_sec": 20.0,
+   "summary": null,
+   "meaning": "Никто ничему не научился, всё заново.",
+   "side": null,
+   "intensity": 0,
+   "cut_notes": "Кода сокращается до кадра с трубой",
+   "source_ref": null,
+   "shots": [
+    {
+     "description": "Смех от лодки к лодке, щиты летят в воду",
+     "size": "Общий",
+     "camera": "Панорама",
+     "duration_sec": 5.0,
+     "asset_codes": [
+      "SH-01",
+      "SH-02",
+      "PR-06"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": "Смех, всплески",
+     "notes": null
+    },
+    {
+     "description": "Лепёшки, фрукты, кувшины; борта сдвигаются в плавучий базар",
+     "size": "Общий",
+     "camera": "Отъезд вверх",
+     "duration_sec": 5.0,
+     "asset_codes": [
+      "SH-03",
+      "PR-15"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": null,
+     "notes": null
+    },
+    {
+     "description": "Дозорные за столом жуют; один поднимает трубу к горизонту",
+     "size": "Средний",
+     "camera": "Статика",
+     "duration_sec": 4.0,
+     "asset_codes": [
+      "CH-01",
+      "CH-02",
+      "PR-01",
+      "PR-15"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": null,
+     "notes": null
+    },
+    {
+     "description": "Через трубу: силуэт третьего острова",
+     "size": "POV",
+     "camera": "Статика",
+     "duration_sec": 2.0,
+     "asset_codes": [
+      "LC-14",
+      "ST-01"
+     ],
+     "asset_states": {},
+     "dialogue": [],
+     "sfx": null,
+     "notes": null
+    },
+    {
+     "description": "Оба дозорных разом. Стоп-кадр",
+     "size": "Средний",
+     "camera": "Стоп-кадр",
+     "duration_sec": 4.0,
+     "asset_codes": [
+      "CH-01",
+      "CH-02"
+     ],
+     "asset_states": {},
+     "dialogue": [
+      {
+       "character": null,
+       "speaker": "Оба дозорных",
+       "text": "Ma lord?!",
+       "translation": "Милорд?!"
+      }
+     ],
+     "sfx": "Ma lord?!",
+     "notes": null
+    }
+   ]
+  }
+ ],
+ "setups": [
+  {
+   "motif": "Кривая труба врёт",
+   "setup": [
+    "1.4",
+    "1.5"
+   ],
+   "payoff": [
+    "11.3",
+    "11.4",
+    "11.5",
+    "12.4"
+   ],
+   "takeaway": "Через трубу богато и страшно, вблизи бедно и смешно",
+   "risk": "POV-кадры должны быть узнаваемы одним луком (ST-01)"
+  },
+  {
+   "motif": "Третий остров",
+   "setup": [
+    "1.6"
+   ],
+   "payoff": [
+    "12.4"
+   ],
+   "takeaway": "Силуэт был с самого начала, его никто не заметил",
+   "risk": "Заметен при пересмотре, но не бросается в глаза в первый раз"
+  },
+  {
+   "motif": "Водная краска на овце",
+   "setup": [
+    "3.3"
+   ],
+   "payoff": [
+    "11.4"
+   ],
+   "takeaway": "Краска смывается, потому что она водная",
+   "risk": "Показать в 3.03, что краска жидкая и капает. Чья овца смывается в 11: северная из сц. 3 или из южного стада?"
+  },
+  {
+   "motif": "«Ma lord, ma lord!»",
+   "setup": [
+    "4.3"
+   ],
+   "payoff": [
+    "12.5"
+   ],
+   "takeaway": "Реплика-рефрен, в финале звучит вопросом",
+   "risk": "Одинаковая интонация и голос дозорного"
+  },
+  {
+   "motif": "Накидывание подробностей",
+   "setup": [
+    "4.4"
+   ],
+   "payoff": [
+    "6.2"
+   ],
+   "takeaway": "С каждым пересказом чудище страшнее",
+   "risk": "В сценарии только 2 пересказа, а мотив обещает рост «с каждой сценой». Добавить третий (напр. бегуны в 8.04)?"
+  },
+  {
+   "motif": "Барабан нарастает",
+   "setup": [
+    "7.1",
+    "7.2",
+    "7.3",
+    "7.4",
+    "7.5",
+    "7.6"
+   ],
+   "payoff": [
+    "11.6"
+   ],
+   "takeaway": "Тишина бьёт сильнее любого звука",
+   "risk": "Барабанщик впервые в кадре только в 7.05: показать его раньше"
+  },
+  {
+   "motif": "Хобот из печной трубы",
+   "setup": [
+    "5.2"
+   ],
+   "payoff": [
+    "11.3"
+   ],
+   "takeaway": "Слон — это ослы и печные трубы",
+   "risk": "Хобот должен быть заметен как отдельная деталь в сборке"
+  },
+  {
+   "motif": "Средний осёл не в ногу",
+   "setup": [
+    "5.4"
+   ],
+   "payoff": [
+    "11.3"
+   ],
+   "takeaway": "Жующая морда — тот самый осёл",
+   "risk": "Один и тот же осёл (AN-03) в обоих шотах"
+  },
+  {
+   "motif": "Медные тазы = золотые щиты",
+   "setup": [
+    "6.5"
+   ],
+   "payoff": [
+    "10.4",
+    "11.5",
+    "12.1"
+   ],
+   "takeaway": "«Золотое войско» — это бабушкины тазы",
+   "risk": null
+  },
+  {
+   "motif": "Туман",
+   "setup": [
+    "9.3"
+   ],
+   "payoff": [
+    "10.1",
+    "10.2",
+    "10.3",
+    "10.4",
+    "10.5",
+    "10.6",
+    "11.1",
+    "11.2"
+   ],
+   "takeaway": "План правителей сработал на обоих, и поэтому провалился",
+   "risk": null
+  },
+  {
+   "motif": "«Мы бедные, а они сияют»",
+   "setup": [
+    "2.5",
+    "2.6"
+   ],
+   "payoff": [
+    "11.6"
+   ],
+   "takeaway": "Оба наконец видят, что бедны одинаково",
+   "risk": null
+  },
+  {
+   "motif": "Зеркальная симметрия",
+   "setup": [
+    "1.1"
+   ],
+   "payoff": [
+    "11.1"
+   ],
+   "takeaway": "Нос в нос — финальное зеркало",
+   "risk": "Повторить композицию 1.1"
+  },
+  {
+   "motif": "Дозорных угощают",
+   "setup": [
+    "6.2",
+    "6.3"
+   ],
+   "payoff": [
+    "12.3"
+   ],
+   "takeaway": "Дозорные снова жуют: всё по кругу",
+   "risk": null
+  }
+ ],
+ "open_questions": [
+  {
+   "question": "«Глашатай» есть в списке, но не появляется ни в одной сцене",
+   "related": [
+    "CH-06"
+   ]
+  }
+ ]
+}

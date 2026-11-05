@@ -98,6 +98,7 @@ def apply_bundle(
     bundle: Bundle,
     *,
     overwrite_work_fields: bool = False,
+    actor_id: int | None = None,
 ) -> ImportReport:
     report = ImportReport(warnings=list(bundle.warnings))
     overwrite = overwrite_work_fields
@@ -128,6 +129,8 @@ def apply_bundle(
                 "drum_level": row.drum_level,
                 "meaning": row.meaning,
                 "cut_notes": row.cut_notes,
+                # В Excel стороны нет: повторный импорт не стирает то, что поставили на сайте.
+                **({"side": row.side} if row.side is not None else {}),
             },
             _work(row),
             {"order": next_scene_order_here},
@@ -138,17 +141,23 @@ def apply_bundle(
 
     # Ассеты и их состояния
     asset_ids: dict[str, int] = {}
+    state_ids: dict[tuple[str, str], int] = {}
     for row in bundle.assets:
         asset = upsert(
             models.Asset,
             "asset",
             {"project_id": project_id, "code": row.code},
-            {"type": row.type, "name": row.name, "description": row.description},
+            {
+                "type": row.type,
+                "name": row.name,
+                "description": row.description,
+                **({"side": row.side} if row.side is not None else {}),
+            },
             _work(row),
         )
         asset_ids[row.code] = asset.id
         for position, name in enumerate(row.states, start=1):
-            upsert(
+            state = upsert(
                 models.AssetState,
                 "asset_state",
                 {"asset_id": asset.id, "name": name},
@@ -156,6 +165,7 @@ def apply_bundle(
                 {},
                 {"order": position},
             )
+            state_ids[(row.code, name)] = state.id
 
     # Шоты и континьюити
     shot_ids: dict[str, int] = {}
@@ -209,7 +219,10 @@ def apply_bundle(
             if asset_id is None:
                 continue  # предупреждение о неизвестном ID уже есть в bundle.warnings
             if (shot_id, asset_id) not in linked:
-                db.add(models.ShotAsset(shot_id=shot_id, asset_id=asset_id))
+                state_id = state_ids.get((code, row.asset_states.get(code, "")))
+                db.add(
+                    models.ShotAsset(shot_id=shot_id, asset_id=asset_id, asset_state_id=state_id)
+                )
                 linked.add((shot_id, asset_id))
                 report.created["shot_asset"] += 1
     db.flush()
@@ -258,5 +271,5 @@ def apply_bundle(
             _work(row),
         )
 
-    log_activity(db, None, "import", "project", project_id, report.summary(), project_id)
+    log_activity(db, actor_id, "import", "project", project_id, report.summary(), project_id)
     return report
