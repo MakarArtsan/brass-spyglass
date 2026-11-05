@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-import shutil
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -10,10 +9,11 @@ from pathlib import Path
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import select
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from app import backup, events, uploads
+from app import backup, events, models, uploads
 from app import db as database
 from app.api import access, animatic, dashboard, entities, health, me
 from app.api import auth as auth_api
@@ -31,8 +31,7 @@ from app.permissions import PermissionDenied
 from app.services import projects, seed
 from app.services.core import ConflictError, NotFoundError, ValidationError
 from app.tg import runtime as telegram_runtime
-from app.tg.indexer import Indexer
-from app.tg.telethon_gateway import TelethonGateway
+from app.tg.pool import IndexerPool
 from app.worker import JobRunner
 
 log = logging.getLogger("app")
@@ -102,7 +101,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.tokens = LoginTokenStore(settings.login_token_ttl_sec)
     app.state.tg = TelegramService(settings, app.state.tokens)
     await app.state.tg.start()
-    indexer = await _start_indexer(app, settings)
+    pool = await _start_indexers(app, settings)
     backup.loop = asyncio.get_running_loop()
     backup.sender = app.state.tg.send_to_owner if app.state.tg.bot is not None else None
     maintenance = Maintenance(settings, app.state.jobs.wake)
@@ -112,26 +111,25 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     finally:
         await maintenance.stop()
         backup.sender = None
-        if indexer is not None:
-            await indexer.stop()
+        if pool is not None:
+            await pool.stop()
         telegram_runtime.reset()
         await app.state.tg.stop()
         await app.state.jobs.stop()
 
 
-async def _start_indexer(app: FastAPI, settings: Settings) -> Indexer | None:
-    """Индексатор стартует, только если юзербот подключён и задан чат (TG_SESSION, TG_CHAT_ID)."""
-    userbot, chat_id = app.state.tg.userbot, settings.tg_chat_id
-    if userbot is None or chat_id is None:
+async def _start_indexers(app: FastAPI, settings: Settings) -> IndexerPool | None:
+    """По индексатору на чат каждого проекта; только если юзербот подключён (TG_SESSION)."""
+    userbot = app.state.tg.userbot
+    if userbot is None:
         return None
-    shutil.rmtree(settings.tg_tmp_dir, ignore_errors=True)  # недокачанное с прошлого запуска
-    gateway = TelethonGateway(userbot, chat_id)
-    indexer = Indexer(gateway, database.session_factory(), settings)
-    telegram_runtime.gateway = gateway
-    telegram_runtime.indexer = indexer
-    telegram_runtime.loop = asyncio.get_running_loop()
-    await indexer.start()
-    return indexer
+    with database.session_factory()() as db:
+        chats = [c for c in db.scalars(select(models.Project.tg_chat_id)) if c is not None]
+    if not chats:
+        return None
+    pool = IndexerPool(userbot, database.session_factory(), settings)
+    await pool.start(chats)
+    return pool
 
 
 def create_app() -> FastAPI:

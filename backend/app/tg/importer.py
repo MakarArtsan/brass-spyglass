@@ -56,10 +56,14 @@ def _await[T](coro: Coroutine[Any, Any, T], timeout: float = DOWNLOAD_TIMEOUT_SE
                 raise MediaError("Telegram не ответил вовремя") from None
 
 
-def _gateway() -> Any:
-    if runtime.gateway is None:
-        raise MediaError("Юзербот Telegram не подключён: проверьте TG_SESSION и TG_CHAT_ID")
-    return runtime.gateway
+def _gateway(chat_id: int | None) -> Any:
+    """Шлюз чата проекта (у каждого проекта свой чат)."""
+    gateway = runtime.gateway_for(chat_id)
+    if gateway is None:
+        raise MediaError(
+            "Юзербот Telegram не подключён к чату проекта: проверьте TG_SESSION и чат проекта"
+        )
+    return gateway
 
 
 def _sha256(path: Path) -> tuple[str, int]:
@@ -102,10 +106,12 @@ def run_import(
 ) -> None:
     """Импорт выбранного. Если часть не удалась, задача помечается ошибкой с итогом, а принятые
     файлы остаются в карточке."""
-    gateway = _gateway()
     ids: list[int] = list(payload["media_ids"])
     with database.session_factory()() as db:
         actor = _actor(db, created_by)
+        project = db.get(models.Project, payload["project_id"])
+        chat_id = project.tg_chat_id if project else None
+    gateway = _gateway(chat_id)
     done, failures = 0, []
     for index, media_id in enumerate(ids):
         try:
@@ -193,9 +199,10 @@ def _import_one(
 
 def run_preview(job_id: int, media_id: int, settings: Settings) -> None:
     """Скачивает файл во временный кэш просмотра (не в проект)."""
-    gateway = _gateway()
     with database.session_factory()() as db:
         row = tg_service.get_media(db, media_id)
+        row_chat = row.chat_id
+        gateway = _gateway(row_chat)
         info = MediaInfo(
             message_id=row.message_id, topic_id=row.topic_id, posted_at=row.posted_at,
             kind=row.kind, mime=row.mime, file_name=row.file_name,
@@ -203,10 +210,11 @@ def run_preview(job_id: int, media_id: int, settings: Settings) -> None:
         expected = row.size_bytes or 0
         project = projects.get_by_chat(db, row.chat_id)  # лимит — того проекта, чей это чат
         limit_gb = project.storage_limit_gb if project else 5.0
-    if previews.cached(settings, info.message_id, info.topic_id) is not None:
+    if previews.cached(settings, row_chat, info.message_id, info.topic_id) is not None:
         return
     storage.ensure_room(settings, limit_gb, expected)
-    dest = previews.target(settings, info)
+    dest = previews.target(settings, row_chat, info)
+    dest.parent.mkdir(parents=True, exist_ok=True)
     part = dest.with_suffix(dest.suffix + ".part")
     try:
         _await(gateway.download(info.message_id, part, None))

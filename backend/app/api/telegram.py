@@ -92,8 +92,8 @@ def _item(db: Session, row: models.TgMedia) -> dict[str, Any]:
 def tg_status(db: DbDep, request: Request) -> dict[str, Any]:
     settings = get_settings()
     chat = projects.current(db).tg_chat_id
-    mine = runtime.gateway is not None and getattr(runtime.gateway, "chat_id", None) == chat
-    indexer = runtime.indexer if mine else None
+    mine = runtime.gateway_for(chat) is not None
+    indexer = runtime.indexer_for(chat)
     state = indexer.state if indexer else None
     overview = tg_service.overview(db, chat) if chat is not None else None
     return {
@@ -115,10 +115,10 @@ def tg_status(db: DbDep, request: Request) -> dict[str, Any]:
 def tg_sync(db: DbDep, actor: ActorDep) -> dict[str, bool]:
     """Прочитать чат заново, не дожидаясь плановой синхронизации. Только владелец."""
     permissions.require(permissions.can_manage_users(actor), "Синхронизацию запускает владелец")
-    chat = projects.current(db).tg_chat_id
-    if runtime.indexer is None or getattr(runtime.gateway, "chat_id", None) != chat:
+    indexer = runtime.indexer_for(projects.current(db).tg_chat_id)
+    if indexer is None:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Юзербот Telegram не подключён")
-    runtime.indexer.request_sync()
+    indexer.request_sync()
     return {"started": True}
 
 
@@ -206,7 +206,7 @@ def tg_view(media_id: int, request: Request, db: DbDep, actor: ActorDep) -> dict
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT, "Ссылку открывают в новой вкладке"
         )
-    if previews.cached(get_settings(), row.message_id, row.topic_id) is not None:
+    if previews.cached(get_settings(), row.chat_id, row.message_id, row.topic_id) is not None:
         return {"ready": True, "url": view_url(db, row.id), "job_id": None}
     pending = db.scalars(
         select(models.Job).where(
@@ -227,7 +227,7 @@ def tg_view_file(media_id: int, db: DbDep, t: str | None = None) -> FileResponse
     if not signing.verify(t, media_id, "tg-view", scope.current_project_id(db)):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Ссылка устарела")
     row = _media_row(db, media_id)
-    path = previews.cached(get_settings(), row.message_id, row.topic_id)
+    path = previews.cached(get_settings(), row.chat_id, row.message_id, row.topic_id)
     if path is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Файл ещё не загружен для просмотра")
     media_type = mimetypes.guess_type(path.name)[0] or row.mime or "application/octet-stream"
