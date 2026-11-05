@@ -23,7 +23,8 @@ export async function signIn(context: BrowserContext, role: Role = 'owner') {
  * Вход (`/login`), уже полные адреса и внешние ссылки остаются как есть. Старые ссылки без проекта
  * проверяет `projects.spec.ts` (на абсолютном адресе, который это не трогает). */
 export function inProject(url: string): string {
-  if (!url.startsWith('/') || url.startsWith('/login') || url.startsWith('/p/') || url.startsWith('/api/')) return url
+  const outside = ['/login', '/new-project', '/p/', '/api/']
+  if (!url.startsWith('/') || outside.some((prefix) => url.startsWith(prefix))) return url
   return `/p/brass-spyglass${url}`
 }
 
