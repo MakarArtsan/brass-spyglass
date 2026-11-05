@@ -359,6 +359,7 @@ def run(export_id: int, job_id: int, settings: Settings) -> None:
             project_id=row.project_id,
         )
         limit = db.get(models.Project, row.project_id).storage_limit_gb  # type: ignore[union-attr]
+        project_id = row.project_id
         stamp = row.created_at.strftime("%Y%m%d-%H%M%S")
         name = f"brass-spyglass-{row.id:04d}-{row.target}-{stamp}.zip"
     if not plan.spec.clips:
@@ -367,7 +368,10 @@ def run(export_id: int, job_id: int, settings: Settings) -> None:
             "Включите «Плейсхолдеры» или отметьте финальные файлы."
         )
     try:
-        storage.ensure_room(settings, limit, plan.bytes_needed + plan.bytes_needed // 20)
+        with database.session_factory()() as short:
+            storage.ensure_room(
+                settings, short, project_id, limit, plan.bytes_needed + plan.bytes_needed // 20
+            )
     except storage.NoRoom as exc:
         raise MediaError(str(exc)) from exc
 

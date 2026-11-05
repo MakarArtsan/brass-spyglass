@@ -164,14 +164,19 @@ def test_media_widget_warns_at_80_percent_and_flags_a_full_disk(api):
     from app import db as database
     from app import models, storage
     from app.config import get_settings
+    from tests.test_files import upload
 
-    used = storage.used_bytes(get_settings(), fresh=True)
-    assert used > 0  # база уже лежит на диске
+    assert upload(api, b"\x89PNG\r\n\x1a\n" + b"x" * 5000, "weight.png").status_code == 201
+    with database.session_factory()() as db:
+        project_id = db.query(models.Project).one().id
+        used = storage.project_used_bytes(get_settings(), db, project_id, fresh=True)
+    assert used > 5000  # файл проекта лежит на диске
     for fraction, warn, full in ((0.5, False, False), (0.85, True, False), (1.5, True, True)):
         with database.session_factory()() as db:
             project = db.query(models.Project).one()
             project.storage_limit_gb = used / fraction / 1024**3
             db.commit()
+        storage.forget(get_settings())  # место проекта кэшируется на несколько секунд
         got = _dash(api)["media"]["storage"]
         assert (got["warn"], got["full"]) == (warn, full), (fraction, got)
         assert abs(got["used_pct"] - 100 * fraction) < 3
