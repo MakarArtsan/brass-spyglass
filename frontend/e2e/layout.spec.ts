@@ -8,9 +8,22 @@ test.describe('раскладки', () => {
 
   test('ПК: левый сайдбар со всеми разделами, без нижней панели', async ({ page, isMobile }) => {
     test.skip(!!isMobile, 'только ПК')
+    // Импорт-тесты заводят в общей базе другие проекты: у владельца сайта их стало несколько, а здесь проверяем
+    // раскладку с одним проектом — ответ сессии подменяется.
+    await page.route('**/api/session', (r) =>
+      r.fulfill({
+        json: {
+          user: { id: 1, name: 'Артём', tg_username: 'artem', color: '#E8C979', role: 'owner', has_avatar: false, last_seen_at: null },
+          is_superadmin: false,
+          projects: [{ slug: 'brass-spyglass', title: 'Битва при кривом зеркале', title_en: 'The Brass Spyglass', role: 'owner', archived: false }],
+          can_create_projects: false,
+          pending_count: 0,
+        },
+      }),
+    )
     await page.goto('/')
     const nav = page.getByRole('navigation', { name: 'The Brass Spyglass' }).first()
-    await expect(nav.getByRole('link')).toHaveCount(14)
+    await expect(nav.getByRole('link')).toHaveCount(15)
     await expect(page.getByRole('button', { name: 'Ещё' })).toBeHidden()
     expect(await noHorizontalScroll(page)).toBe(true)
   })

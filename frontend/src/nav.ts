@@ -2,6 +2,7 @@ import {
   AudioLines,
   Clapperboard,
   Download,
+  FileUp,
   Film,
   Images,
   LayoutDashboard,
@@ -23,7 +24,7 @@ export interface NavItem {
   icon: LucideIcon
   group: 'main' | 'service'
   /** Нужна способность пользователя (например, гость не видит журнал). */
-  needs?: 'journal' | 'export'
+  needs?: 'journal' | 'export' | 'import_scenario'
   /** Пункт нижней панели телефона и её короткая подпись. */
   phone?: string
   stage: number
@@ -43,9 +44,10 @@ export const NAV: NavItem[] = [
   { path: '/export', label: ru.nav.export, icon: Download, group: 'main', needs: 'export', stage: 3, note: ru.placeholder.export },
   { path: '/journal', label: ru.nav.journal, icon: ScrollText, group: 'service', needs: 'journal', stage: 1, note: ru.placeholder.journal },
   { path: '/team', label: ru.nav.team, icon: Users, group: 'service', stage: 0 },
+  { path: '/import', label: ru.nav.import, icon: FileUp, group: 'service', needs: 'import_scenario', stage: 3 },
   { path: '/telegram', label: ru.nav.telegram, icon: Send, group: 'service', stage: 2, note: ru.placeholder.telegram },
   { path: '/trash', label: ru.nav.trash, icon: Trash2, group: 'service', stage: 4, note: ru.placeholder.trash },
 ]
 
-export const visibleNav = (abilities: { journal: boolean; export: boolean }) =>
+export const visibleNav = (abilities: { journal: boolean; export: boolean; import_scenario: boolean }) =>
   NAV.filter((i) => !i.needs || abilities[i.needs])
