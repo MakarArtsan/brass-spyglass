@@ -10,10 +10,11 @@ import io
 import logging
 import re
 import struct
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 from sqlalchemy import select
-from telethon import TelegramClient, errors, events
+from telethon import Button, TelegramClient, errors, events
 from telethon.sessions import StringSession
 
 from app import db as database
@@ -27,7 +28,8 @@ from app.auth.membership import (
 )
 from app.auth.tokens import LoginTokenStore
 from app.config import Settings
-from app.services import members, users
+from app.permissions import PermissionDenied
+from app.services import core, members, users
 
 log = logging.getLogger(__name__)
 
@@ -95,6 +97,9 @@ class TelegramService:
         self.userbot: TelegramClient | None = None
         self.membership: MembershipChecker = DisabledMembership()
         self.bot_username: str = settings.tg_bot_username.lstrip("@")
+        # Решение суперадмина по заявке (подтвердить/отклонить) задаёт приложение: бот не знает про
+        # индексаторы. (действие, id проекта, id пользователя сайта) → что решили.
+        self.on_decision: Callable[[str, int, int], Awaitable[object]] | None = None
         self._sync_task: asyncio.Task[None] | None = None
         self._event_tasks: dict[int, asyncio.Task[None]] = {}
         self.userbot_account: dict[str, str | None] | None = None  # кого добавлять в чат проекта
@@ -121,6 +126,7 @@ class TelegramService:
             me = await self.bot.get_me()
             self.bot_username = self.bot_username or (me.username or "")
             self.bot.add_event_handler(self._on_message, events.NewMessage(incoming=True))
+            self.bot.add_event_handler(self._on_callback, events.CallbackQuery)
         except Exception:
             log.exception("не удалось запустить бота входа")
             self.bot = None
@@ -233,6 +239,69 @@ class TelegramService:
                     await event.respond(MSG_OK.format(name=result.name))
                 else:
                     await event.respond(MSG_EXPIRED)
+
+    # --- личные сообщения и кнопки ---------------------------------------------------------------
+
+    async def notify(
+        self, tg_id: int, text: str, *, buttons: list[list[object]] | None = None
+    ) -> bool:
+        """Пишет человеку в личные сообщения. Не вышло (не нажимал Start, заблокировал бота) — не
+        страшно: то же самое видно на сайте."""
+        if self.bot is None:
+            return False
+        try:
+            await self.bot.send_message(tg_id, text, buttons=buttons)  # type: ignore[arg-type]
+            return True
+        except Exception:
+            log.warning("не удалось написать %s в Telegram", tg_id, exc_info=True)
+            return False
+
+    async def announce_request(self, project_id: int, title: str, who: str) -> int:
+        """Сообщает суперадминам о новой заявке с кнопками решения. Возвращает, скольким дошло."""
+        buttons = [
+            [
+                Button.inline("Подтвердить", data=f"approve:{project_id}".encode()),
+                Button.inline("Отклонить", data=f"reject:{project_id}".encode()),
+            ]
+        ]
+        text = (
+            f"Заявка на проект «{title}».\nОт: {who}.\n"
+            "Пока вы не подтвердите, команда проекта не сможет загружать файлы."
+        )
+        sent = 0
+        for admin in sorted(self.settings.superadmins):
+            sent += await self.notify(admin, text, buttons=buttons)
+        return sent
+
+    @staticmethod
+    def _site_user_id(tg_id: int) -> int | None:
+        with database.session_factory()() as session:
+            return session.scalar(select(models.User.id).where(models.User.tg_id == tg_id))
+
+    async def _on_callback(self, event: events.CallbackQuery.Event) -> None:
+        action, _, raw = (event.data or b"").decode(errors="ignore").partition(":")
+        if action not in ("approve", "reject") or not raw.isdigit():
+            return
+        if not self.settings.is_superadmin(event.sender_id):
+            await event.answer("Решает только владелец сайта.", alert=True)
+            return
+        user_id = await asyncio.to_thread(self._site_user_id, event.sender_id)
+        if user_id is None or self.on_decision is None:
+            await event.answer("Сначала войдите на сайт, потом нажимайте кнопки.", alert=True)
+            return
+        try:
+            outcome = await self.on_decision(action, int(raw), user_id)
+        except (PermissionDenied, core.ServiceError) as exc:  # уже подтверждён, проекта нет
+            await event.answer(str(exc), alert=True)
+            return
+        await event.answer("Готово")
+        title = getattr(outcome, "title", "")
+        done = (
+            f"Проект «{title}» подтверждён."
+            if action == "approve"
+            else f"Заявка «{title}» отклонена."
+        )
+        await event.edit(done)
 
     async def send_to_owner(self, path: Path, caption: str) -> None:
         """Бот присылает файл владельцу (копия базы). Нужно, чтобы владелец когда-то нажал Start."""

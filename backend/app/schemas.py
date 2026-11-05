@@ -42,6 +42,7 @@ class ProjectBrief(BaseModel):
     title_en: str
     role: str
     archived: bool
+    pending: bool = False  # ждёт подтверждения суперадмина
 
 
 class SessionOut(BaseModel):
@@ -51,6 +52,7 @@ class SessionOut(BaseModel):
     is_superadmin: bool
     projects: list[ProjectBrief]
     can_create_projects: bool = False
+    pending_count: int = 0  # сколько заявок ждёт суперадмина (обычным людям 0)
 
 
 class ProjectOut(BaseModel):
@@ -58,6 +60,7 @@ class ProjectOut(BaseModel):
 
     id: int
     slug: str
+    approved: bool  # подтверждён суперадмином; иначе команда не загружает файлы
     title: str
     title_en: str
     contest: str
@@ -106,6 +109,23 @@ class UserbotOut(BaseModel):
 
     username: str | None
     name: str | None
+
+
+class PendingOut(BaseModel):
+    """Заявка на проект, которую решает суперадмин."""
+
+    slug: str
+    title: str
+    title_en: str
+    created_at: datetime
+    owner_name: str | None
+    owner_username: str | None
+
+
+class DecisionOut(BaseModel):
+    slug: str
+    title: str
+    status: str  # approve | reject
 
 
 class AvailableChatsOut(BaseModel):

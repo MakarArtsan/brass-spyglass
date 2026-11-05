@@ -30,7 +30,7 @@ RECENT_JOB_SEC = 120
 
 
 def member(actor: ActorDep) -> Actor:
-    permissions.require(permissions.can_upload(actor), "Чат команды недоступен гостю")
+    permissions.require_upload(actor, "Чат команды недоступен гостю")
     return actor
 
 

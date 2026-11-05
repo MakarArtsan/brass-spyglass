@@ -280,7 +280,7 @@ def create(
     spec = _spec_for(entity_type)
     permissions.require(permissions.can_create(actor, entity_type))
     if entity_type == EntityType.FILE:
-        permissions.require(permissions.can_upload(actor))
+        permissions.require_upload(actor)
     _check_fields(spec.fields | spec.create_only, data)
 
     obj = spec.model(**data)

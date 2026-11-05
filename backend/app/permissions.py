@@ -21,6 +21,8 @@ class Actor:
     id: int
     role: Role
     project_id: int | None = None  # проект, в котором человек действует (None — вне проекта)
+    pending: bool = False  # проект ещё не подтверждён суперадмином: файлы не загружаются
+    superadmin: bool = False  # владелец сайта: подтверждение на него не распространяется
 
 
 class PermissionDenied(Exception):  # noqa: N818 — читается лучше, чем PermissionDeniedError
@@ -40,7 +42,23 @@ def can_view_journal(actor: Actor) -> bool:
 
 
 def can_upload(actor: Actor) -> bool:
-    return actor.role != Role.GUEST
+    if actor.role == Role.GUEST:
+        return False
+    return not actor.pending or actor.superadmin
+
+
+PENDING_MESSAGE = (
+    "Проект ещё не подтверждён администратором сайта: загрузка файлов откроется после подтверждения"
+)
+
+
+def require_upload(actor: Actor, guest_message: str = "Гость не загружает файлы") -> None:
+    """Загрузка (файлы, версии, ссылки, импорт из Telegram): гостю нельзя, а в неподтверждённом
+    проекте нельзя никому, кроме владельца сайта. Причина в сообщении — своя."""
+    if actor.role == Role.GUEST:
+        raise PermissionDenied(guest_message)
+    if actor.pending and not actor.superadmin:
+        raise PermissionDenied(PENDING_MESSAGE)
 
 
 def can_export(actor: Actor) -> bool:

@@ -110,7 +110,8 @@ def ensure_default_project(db: Session, settings: Settings | None = None) -> mod
     settings = settings or get_settings()
     project = get_project(db)
     if project is None:
-        project = models.Project(**DEFAULT_PROJECT)
+        # Проект фильма создаёт сама система, подтверждать его некому: он активен сразу.
+        project = models.Project(**DEFAULT_PROJECT, approved_at=datetime.now(UTC))
         db.add(project)
         db.flush()
         log_activity(db, None, "create", "project", project.id, project_id=project.id)
@@ -191,6 +192,7 @@ def create(
     if internal <= now:
         internal = official  # срок близко: внутреннего «раньше» уже нет
     english = (title_en or "").strip() or title
+    approved = settings.is_superadmin(user.tg_id) or not settings.project_approval
     project = models.Project(
         **{
             **DEFAULT_PROJECT,
@@ -202,6 +204,9 @@ def create(
             "deadline_internal": internal,
             "storage_limit_gb": settings.new_project_storage_gb,
             "tg_chat_id": chat_id,
+            # Свой проект суперадмина активен сразу; остальные ждут его подтверждения.
+            "approved_at": now if approved else None,
+            "approved_by": user.id if approved else None,
         }
     )
     db.add(project)
@@ -215,3 +220,69 @@ def create(
         db, user.id, "create", "project", project.id, {"chat_id": chat_id}, project_id=project.id
     )
     return project
+
+
+def pending(db: Session) -> list[models.Project]:
+    """Проекты, ждущие подтверждения суперадмина (отклонённые уходят в архив и сюда не попадают)."""
+    return list(
+        db.scalars(
+            select(models.Project)
+            .where(models.Project.approved_at.is_(None), models.Project.archived_at.is_(None))
+            .order_by(models.Project.id)
+        )
+    )
+
+
+def _require_superadmin(user: models.User, settings: Settings) -> None:
+    if not settings.is_superadmin(user.tg_id):
+        raise PermissionDenied("Подтверждает проекты только владелец сайта")
+
+
+def approve(
+    db: Session, user: models.User, project: models.Project, settings: Settings | None = None
+) -> models.Project:
+    """Подтверждение: команда получает право загружать файлы. Повторное — без последствий."""
+    settings = settings or get_settings()
+    _require_superadmin(user, settings)
+    if project.approved_at is None:
+        project.approved_at = datetime.now(UTC)
+        project.approved_by = user.id
+        db.flush()
+        log_activity(db, user.id, "approve", "project", project.id, project_id=project.id)
+    return project
+
+
+def reject(
+    db: Session, user: models.User, project: models.Project, settings: Settings | None = None
+) -> int | None:
+    """Отказ: проект уходит в архив, а чат освобождается — его можно привязать к другому проекту.
+    Возвращает чат, который был у проекта (чтобы остановить его индексатор). Подтверждённый проект
+    отклонить нельзя: его архивируют обычным способом."""
+    settings = settings or get_settings()
+    _require_superadmin(user, settings)
+    if project.approved_at is not None:
+        raise ConflictError("Проект уже подтверждён")
+    chat = project.tg_chat_id
+    project.archived_at = datetime.now(UTC)
+    project.tg_chat_id = None
+    db.flush()
+    log_activity(
+        db, user.id, "reject", "project", project.id, {"chat_id": chat}, project_id=project.id
+    )
+    return chat
+
+
+def owners(db: Session, project: models.Project) -> list[models.User]:
+    """Владельцы проекта (при заявке это тот, кто её подал): им сообщают о решении."""
+    return list(
+        db.scalars(
+            select(models.User)
+            .join(models.ProjectMember, models.ProjectMember.user_id == models.User.id)
+            .where(
+                models.ProjectMember.project_id == project.id,
+                models.ProjectMember.role == Role.OWNER.value,
+                models.ProjectMember.active.is_(True),
+            )
+            .order_by(models.User.id)
+        )
+    )

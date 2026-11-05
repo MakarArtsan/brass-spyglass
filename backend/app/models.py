@@ -132,6 +132,13 @@ class Project(Timestamps, Base):
     slug: Mapped[str] = mapped_column(String(64), unique=True)
     tg_chat_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, default=None)
     archived_at: Mapped[datetime | None] = mapped_column(UTCDateTime, default=None)
+    # Подтверждение суперадмином: пока его нет, команда проекта не загружает файлы.
+    approved_at: Mapped[datetime | None] = mapped_column(UTCDateTime, default=None)
+    approved_by: Mapped[int | None] = mapped_column(ForeignKey("user.id"), default=None)
+
+    @property
+    def approved(self) -> bool:
+        return self.approved_at is not None
 
 
 class ProjectMember(Timestamps, Base):

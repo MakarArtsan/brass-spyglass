@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     # Любой пользователь Telegram может войти и создать свой проект. SELF_SERVICE_PROJECTS=false
     # возвращает прежнее правило: входят участники чатов проектов, проекты создаёт суперадмин.
     self_service_projects: bool = True
+    # Новые проекты обычных людей ждут подтверждения суперадмина: до него файлы не загружаются.
+    # PROJECT_APPROVAL=false — проекты сразу активны.
+    project_approval: bool = True
     new_project_storage_gb: float = 1.0  # лимит места нового проекта (меняет суперадмин)
     # В скольких проектах один человек может быть владельцем (суперадмина не касается).
     max_projects_per_user: int = 3

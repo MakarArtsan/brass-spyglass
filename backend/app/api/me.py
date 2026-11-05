@@ -54,6 +54,7 @@ def my_projects(db: Session, user: models.User) -> list[ProjectBrief]:
                 title_en=project.title_en,
                 role=role.value,
                 archived=project.archived_at is not None,
+                pending=project.approved_at is None,
             )
         )
     return briefs
@@ -69,6 +70,7 @@ def session_info(
         is_superadmin=get_settings().is_superadmin(user.tg_id),
         projects=my_projects(db, user),
         can_create_projects=projects.can_create(db, user),
+        pending_count=len(projects.pending(db)) if get_settings().is_superadmin(user.tg_id) else 0,
     )
 
 

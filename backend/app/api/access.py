@@ -35,7 +35,13 @@ class ProjectCtx:
 
     @property
     def actor(self) -> Actor:
-        return Actor(id=self.user.id, role=self.role, project_id=self.project.id)
+        return Actor(
+            id=self.user.id,
+            role=self.role,
+            project_id=self.project.id,
+            pending=self.project.approved_at is None,
+            superadmin=get_settings().is_superadmin(self.user.tg_id),
+        )
 
 
 def role_in(

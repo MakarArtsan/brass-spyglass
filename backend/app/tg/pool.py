@@ -52,6 +52,14 @@ class IndexerPool:
         log.info("индексатор Telegram запущен для чата %s", chat_id)
         return indexer
 
+    async def remove(self, chat_id: int) -> None:
+        """Проект отклонён или чат отвязан: индексатор чата останавливается, шлюз забывается."""
+        indexer = self._started.pop(chat_id, None)
+        if indexer is not None:
+            await indexer.stop()
+        runtime.gateways.pop(chat_id, None)
+        runtime.indexers.pop(chat_id, None)
+
     async def stop(self) -> None:
         for indexer in self._started.values():
             await indexer.stop()

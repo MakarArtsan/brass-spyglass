@@ -12,15 +12,24 @@ import logging
 from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, HTTPException, Request, status
 from sqlalchemy import select
 
+from app import approvals, models
 from app import db as database
-from app import models
 from app.api import access
 from app.auth import session
 from app.auth.membership import ChatInfo, MembershipUnavailable
 from app.config import get_settings
 from app.constants import Role
-from app.schemas import AvailableChatsOut, ChatOut, ProjectBrief, ProjectCreate, UserbotOut
-from app.services import projects
+from app.permissions import PermissionDenied
+from app.schemas import (
+    AvailableChatsOut,
+    ChatOut,
+    DecisionOut,
+    PendingOut,
+    ProjectBrief,
+    ProjectCreate,
+    UserbotOut,
+)
+from app.services import core, projects
 
 log = logging.getLogger(__name__)
 
@@ -63,25 +72,38 @@ def _create(user_id: int, body: ProjectCreate, chat: ChatInfo | None) -> Project
             title_en=project.title_en,
             role=Role.OWNER.value,
             archived=False,
+            pending=project.approved_at is None,
         )
 
 
 async def _after_create(app: FastAPI, slug: str, chat_id: int) -> None:
-    """Запускает индексатор чата и впускает в проект тех, кто в чате уже есть на сайте."""
-    pool = getattr(app.state, "indexer_pool", None)
-    if pool is not None:
-        try:
-            await pool.ensure(chat_id)
-        except Exception:
-            log.exception("индексатор чата %s не запущен", chat_id)
+    """Подтверждённому проекту сразу запускает индексатор чата, неподтверждённому — сообщает
+    суперадмину о заявке (с кнопками решения). Знакомых по чату впускает в проект при любом
+    исходе."""
     with database.session_factory()() as db:
         project = projects.get_by_slug(db, slug)
-        project_id = project.id if project else None
-    if project_id is not None:
-        try:
-            await app.state.tg.sync_project(project_id, chat_id)
-        except Exception:
-            log.exception("участники чата %s не прочитаны", chat_id)
+        if project is None:
+            return
+        project_id, title, approved = project.id, project.title, project.approved_at is not None
+        owner = next(iter(projects.owners(db, project)), None)
+        who = (
+            f"{owner.name} (@{owner.tg_username})"
+            if owner is not None and owner.tg_username
+            else (owner.name if owner else "—")
+        )
+    if approved:
+        pool = getattr(app.state, "indexer_pool", None)
+        if pool is not None:
+            try:
+                await pool.ensure(chat_id)
+            except Exception:
+                log.exception("индексатор чата %s не запущен", chat_id)
+    else:
+        await app.state.tg.announce_request(project_id, title, who)
+    try:
+        await app.state.tg.sync_project(project_id, chat_id)
+    except Exception:
+        log.exception("участники чата %s не прочитаны", chat_id)
 
 
 def _forbidden() -> HTTPException:
@@ -155,3 +177,63 @@ async def create_project(
     if chat is not None:
         background.add_task(_after_create, request.app, brief.slug, chat.id)
     return brief
+
+
+# --- заявки на подтверждение (только суперадмин) -------------------------------------------
+
+
+def _require_superadmin(user_id: int) -> None:
+    with database.session_factory()() as db:
+        user = db.get(models.User, user_id)
+        if user is None or not get_settings().is_superadmin(user.tg_id):
+            raise PermissionDenied("Заявки видит и решает только владелец сайта")
+
+
+def _pending(user_id: int) -> list[PendingOut]:
+    _require_superadmin(user_id)
+    with database.session_factory()() as db:
+        out = []
+        for project in projects.pending(db):
+            owner = next(iter(projects.owners(db, project)), None)
+            out.append(
+                PendingOut(
+                    slug=project.slug,
+                    title=project.title,
+                    title_en=project.title_en,
+                    created_at=project.created_at,
+                    owner_name=owner.name if owner else None,
+                    owner_username=owner.tg_username if owner else None,
+                )
+            )
+        return out
+
+
+def _project_id(slug: str) -> int:
+    with database.session_factory()() as db:
+        project = projects.get_by_slug(db, slug)
+        if project is None:
+            raise core.NotFoundError("Такого проекта нет")
+        return project.id
+
+
+@router.get("/pending", response_model=list[PendingOut])
+async def pending_projects(user: UserDep) -> list[PendingOut]:
+    return await asyncio.to_thread(_pending, user.id)
+
+
+async def _decide(
+    request: Request, slug: str, action: approvals.Action, user: UserDep
+) -> DecisionOut:
+    project_id = await asyncio.to_thread(_project_id, slug)
+    outcome = await approvals.decide(request.app, action, project_id, user.id)
+    return DecisionOut(slug=outcome.slug, title=outcome.title, status=action)
+
+
+@router.post("/{slug}/approve", response_model=DecisionOut)
+async def approve_project(slug: str, request: Request, user: UserDep) -> DecisionOut:
+    return await _decide(request, slug, "approve", user)
+
+
+@router.post("/{slug}/reject", response_model=DecisionOut)
+async def reject_project(slug: str, request: Request, user: UserDep) -> DecisionOut:
+    return await _decide(request, slug, "reject", user)

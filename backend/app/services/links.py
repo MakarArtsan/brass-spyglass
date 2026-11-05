@@ -131,7 +131,7 @@ def attach(
 ) -> models.Attachment:
     """Привязка файла к шоту/сцене/ассету/состоянию. Файл из медиатеки можно привязать к
     ещё одной карточке без повторной загрузки; один и тот же файл — не дважды к одной."""
-    permissions.require(permissions.can_upload(actor))
+    permissions.require_upload(actor)
     if purpose not in {p.value for p in Purpose}:
         raise ValidationError(f"Неизвестное назначение: {purpose}")
     require_attach_target(entity_type)

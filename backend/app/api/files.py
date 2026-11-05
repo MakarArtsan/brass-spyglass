@@ -54,7 +54,7 @@ class UploadInit(BaseModel):
 
 @router.post("/uploads", status_code=status.HTTP_201_CREATED)
 def init_upload(body: UploadInit, db: DbDep, actor: ActorDep) -> dict[str, Any]:
-    permissions.require(permissions.can_upload(actor), "Гость не загружает файлы")
+    permissions.require_upload(actor, "Гость не загружает файлы")
     if files.kind_for(body.name) is None:
         raise HTTPException(
             status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
@@ -92,7 +92,7 @@ async def upload_chunk(
     actor: ActorDep,
     upload_offset: Annotated[int, Header(alias="Upload-Offset", ge=0)],
 ) -> dict[str, int]:
-    permissions.require(permissions.can_upload(actor), "Гость не загружает файлы")
+    permissions.require_upload(actor, "Гость не загружает файлы")
     declared = int(request.headers.get("content-length", "0") or 0)
     if declared > uploads.CHUNK_MAX_BYTES:
         raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, "Кусок больше 16 МБ")
@@ -164,7 +164,7 @@ def complete_upload(
     db: DbDep,
     actor: ActorDep,
 ) -> Any:
-    permissions.require(permissions.can_upload(actor), "Гость не загружает файлы")
+    permissions.require_upload(actor, "Гость не загружает файлы")
     settings = get_settings()
     try:
         meta = uploads.load(settings, upload_id, actor.id)
