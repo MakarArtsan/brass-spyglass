@@ -64,6 +64,15 @@ def test_delete_rules():
     assert not p.can_delete(GUEST, owner_id=GUEST.id)
 
 
+def test_only_owner_edits_the_project():
+    assert [p.can_edit_project(a) for a in (OWNER, DIRECTOR, TEAM, GUEST)] == [
+        True,
+        False,
+        False,
+        False,
+    ]
+
+
 def test_only_owner_restores_and_manages_users():
     assert [p.can_restore(a) for a in (OWNER, DIRECTOR, TEAM, GUEST)] == [True, False, False, False]
     assert [p.can_manage_users(a) for a in (OWNER, DIRECTOR, TEAM, GUEST)] == [

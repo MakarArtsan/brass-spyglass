@@ -6,8 +6,9 @@ from datetime import UTC, datetime, timedelta, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import models, scope
+from app import models, permissions, scope
 from app.config import Settings, get_settings
+from app.permissions import Actor
 from app.services.core import log_activity
 
 # Дубай: UTC+4 круглый год, без перехода на летнее время, поэтому tzdata не нужен.
@@ -49,6 +50,28 @@ def unique_slug(db: Session, wanted: str) -> str:
     while db.scalar(select(models.Project.id).where(models.Project.slug == slug)) is not None:
         slug, n = f"{wanted}-{n}", n + 1
     return slug
+
+
+def rename(
+    db: Session,
+    actor: Actor,
+    *,
+    title: str | None = None,
+    title_en: str | None = None,
+) -> models.Project:
+    """Меняет название проекта (рус. и/или англ.). Адрес `/p/<slug>` остаётся прежним: ссылки,
+    закладки и подписанные ссылки не ломаются. Пишет в журнал пары «было → стало»."""
+    permissions.require(permissions.can_edit_project(actor), "Переименовать проект может владелец")
+    project = current(db)
+    diff: dict[str, list[str]] = {}
+    for field, value in (("title", title), ("title_en", title_en)):
+        value = None if value is None else value.strip()
+        if value and value != getattr(project, field):
+            diff[field] = [getattr(project, field), value]
+            setattr(project, field, value)
+    if diff:
+        log_activity(db, actor.id, "update", "project", project.id, diff, project_id=project.id)
+    return project
 
 
 def current(db: Session) -> models.Project:

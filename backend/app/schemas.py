@@ -1,6 +1,7 @@
 from datetime import datetime
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, StringConstraints
 
 
 class UserOut(BaseModel):
@@ -23,6 +24,7 @@ class AbilitiesOut(BaseModel):
     journal: bool
     manage_users: bool
     restore: bool
+    edit_project: bool
 
 
 class MeOut(BaseModel):
@@ -66,6 +68,20 @@ class ProjectOut(BaseModel):
     target_min_sec: int
     target_max_sec: int
     storage_limit_gb: float
+
+
+ProjectTitle = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)
+]
+
+
+class ProjectRename(BaseModel):
+    """Новое название проекта: по-русски и/или по-английски. Адрес проекта (`slug`) не меняется."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: ProjectTitle | None = None
+    title_en: ProjectTitle | None = None
 
 
 class AuthConfigOut(BaseModel):

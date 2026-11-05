@@ -391,3 +391,18 @@ def test_every_url_in_a_response_carries_the_project(world):
     allowed = (f"/api/p/{A}/", "/api/users/")  # аватары — общие, вне проектов
     stray = sorted({u.split("?")[0] for u in found if not u.startswith(allowed)})
     assert stray == [], f"ссылки без проекта: {stray[:5]}"
+
+
+def test_renaming_one_project_does_not_touch_the_other(world):
+    client, p, _ = world
+    act_as(client, p["carol"])  # владелец второго проекта, гость в первом
+    assert client.patch(f"/api/p/{B}/project", json={"title": "Переименован"}).status_code == 200
+    assert client.patch(f"/api/p/{A}/project", json={"title": "Чужое"}).status_code == 403  # гость
+    titles = {x["slug"]: x["title"] for x in client.get("/api/projects").json()}
+    assert titles[B] == "Переименован" and titles[A] != "Чужое"
+    act_as(client, p["alice"])  # состоит только в первом
+    assert client.get(f"/api/p/{A}/project").json()["title"] == titles[A]
+    assert client.patch(f"/api/p/{B}/project", json={"title": "Взлом"}).status_code == 404
+    act_as(client, p["bob"])  # директор второго: видит новое имя, но менять не может
+    assert client.get(f"/api/p/{B}/project").json()["title"] == "Переименован"
+    assert client.patch(f"/api/p/{B}/project", json={"title": "Взлом"}).status_code == 403

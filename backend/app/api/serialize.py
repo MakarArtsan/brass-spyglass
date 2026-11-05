@@ -306,6 +306,7 @@ def entity_labels(db: Session, pairs: set[tuple[str, int | None]]) -> dict[tuple
         for row in db.scalars(select(model).where(model.id.in_(ids))):
             out[(entity_type, row.id)] = fmt(row)
 
+    fill(EntityType.PROJECT, models.Project, lambda r: f"проект «{r.title}»")
     fill(EntityType.SCENE, models.Scene, lambda r: f"сцена {r.number} «{r.title}»")
     fill(EntityType.SHOT, models.Shot, lambda r: f"шот {r.code}")
     fill(EntityType.ASSET, models.Asset, lambda r: f"ассет {r.code}")

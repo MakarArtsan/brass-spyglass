@@ -75,6 +75,7 @@ export interface Abilities {
   journal: boolean
   manage_users: boolean
   restore: boolean
+  edit_project: boolean
 }
 
 export interface Me {
