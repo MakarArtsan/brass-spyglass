@@ -21,7 +21,7 @@ from app.config import Settings
 from app.constants import Role
 from app.media import MediaError
 from app.permissions import Actor, PermissionDenied
-from app.services import core, jobs, projects
+from app.services import core, jobs
 from app.services import telegram as tg_service
 from app.tg import previews, runtime
 from app.tg.limiter import FloodTooLong
@@ -168,7 +168,8 @@ def _import_one(
         message_id, expected = row.message_id, row.size_bytes or 0
         project = db.get(models.Project, project_id)
         limit_gb = project.storage_limit_gb if project else 5.0
-    storage.ensure_room(settings, limit_gb, expected)
+    with sessions() as room:
+        storage.ensure_room(settings, room, project_id, limit_gb, expected)
 
     tmp = settings.tg_tmp_dir / f"{job_id}-{media_id}.part"
     last = [0.0]
@@ -208,11 +209,11 @@ def run_preview(job_id: int, media_id: int, settings: Settings) -> None:
             kind=row.kind, mime=row.mime, file_name=row.file_name,
         )  # fmt: skip
         expected = row.size_bytes or 0
-        project = projects.get_by_chat(db, row.chat_id)  # лимит — того проекта, чей это чат
-        limit_gb = project.storage_limit_gb if project else 5.0
     if previews.cached(settings, row_chat, info.message_id, info.topic_id) is not None:
         return
-    storage.ensure_room(settings, limit_gb, expected)
+    # Просмотр лежит во временном кэше, а не в файлах проекта: лимит проекта не трогаем, но диск
+    # целиком переполнять нельзя.
+    storage.ensure_disk(settings, expected)
     dest = previews.target(settings, row_chat, info)
     dest.parent.mkdir(parents=True, exist_ok=True)
     part = dest.with_suffix(dest.suffix + ".part")

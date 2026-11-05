@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import linkpreview, models, permissions
+from app import linkpreview, models, permissions, storage
 from app.constants import EntityType, FileKind, FileSource, JobType, Purpose
 from app.permissions import Actor
 from app.services import core, jobs
@@ -133,6 +133,7 @@ def store_upload(
     os.replace(tmp_path, destination)
     file.path = relative
     db.flush()
+    storage.forget_project(project_id)
 
     if kind in (FileKind.VIDEO, FileKind.IMAGE) or ext == "pdf":
         jobs.enqueue(db, JobType.PREVIEW, {"file_id": file.id}, actor.id)

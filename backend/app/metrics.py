@@ -849,7 +849,13 @@ def dashboard_data(
         "runtime": dataclasses.asdict(run),
         "seedance": dataclasses.asdict(seed),
         "media": _media_summary(db, pid)
-        | {"storage": dataclasses.asdict(storage.usage(settings, project.storage_limit_gb))},
+        | {
+            "storage": dataclasses.asdict(
+                storage.usage(
+                    project.storage_limit_gb, storage.project_used_bytes(settings, db, project.id)
+                )
+            )
+        },
         "activity": {
             "heatmap": [{"d": d.isoformat(), "n": n} for d, n in heatmap(activity, start, today)],
             "bars": [

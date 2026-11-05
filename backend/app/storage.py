@@ -1,8 +1,11 @@
-"""Занятое место на диске /data и лимит проекта (ТЗ: дашборд показывает ГБ и предупреждает на 80%).
+"""Занятое место: у проекта (его файлы) и на диске /data целиком (ТЗ: дашборд показывает ГБ и
+предупреждает на 80%).
 
-Считается по файлам на диске, а не по размерам в базе: превью, прокси, база и её WAL тоже занимают
-место, и тарифный диск делят все. Обход каталогов недорог, но дашборд обновляется живьём, поэтому
-результат кэшируется на несколько секунд.
+Считается по файлам на диске, а не по размерам в базе: превью, прокси и оригиналы до сжатия тоже
+занимают место. Место проекта — это каталоги его файлов (`files/<id>`, `originals/<id>`); база,
+бэкапы, кэш и экспорты общие и в долю проекта не входят, но входят в общий счёт диска: заполненный
+диск остановил бы не только загрузки. Обход каталогов недорог, но дашборд обновляется живьём,
+поэтому результат кэшируется на несколько секунд.
 """
 
 import os
@@ -10,13 +13,19 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app import models
 from app.config import Settings
 
 GIB = 1024**3
 WARN_FRACTION = 0.8
 CACHE_TTL_SEC = 15.0
+PROJECT_CACHE_TTL_SEC = 3.0  # короче: сразу после загрузки человек ждёт увидеть новое число
 
 _cache: dict[str, tuple[float, int]] = {}
+_project_cache: dict[tuple[str, int], tuple[float, int]] = {}
 
 
 def dir_size(path: Path) -> int:
@@ -58,9 +67,37 @@ def used_bytes(settings: Settings, *, fresh: bool = False) -> int:
     return value
 
 
+def project_used_bytes(
+    settings: Settings, db: Session, project_id: int, *, fresh: bool = False
+) -> int:
+    """Место, которое занимают файлы проекта: оригиналы, превью, прокси и оригиналы до сжатия.
+    Удалённые в корзину файлы лежат на диске, пока их не уберёт уборка, поэтому тоже считаются."""
+    key = (str(settings.data_dir), project_id)
+    now = time.monotonic()
+    cached = _project_cache.get(key)
+    if cached is not None and not fresh and now - cached[0] < PROJECT_CACHE_TTL_SEC:
+        return cached[1]
+    ids = list(db.scalars(select(models.File.id).where(models.File.project_id == project_id)))
+    value = 0
+    for file_id in ids:
+        name = f"{file_id:06d}"
+        value += dir_size(settings.files_dir / name) + dir_size(settings.originals_dir / name)
+    _project_cache[key] = (now, value)
+    return value
+
+
+def forget_project(project_id: int) -> None:
+    """У проекта появился или исчез файл: место считать заново."""
+    for key in [k for k in _project_cache if k[1] == project_id]:
+        _project_cache.pop(key, None)
+
+
 def forget(settings: Settings) -> None:
     """Сбросить кэш (после загрузки или удаления файла считать заново)."""
-    _cache.pop(str(settings.data_dir), None)
+    key = str(settings.data_dir)
+    _cache.pop(key, None)
+    for cached in [k for k in _project_cache if k[0] == key]:
+        _project_cache.pop(cached, None)
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,8 +109,8 @@ class Usage:
     full: bool  # лимит исчерпан
 
 
-def usage(settings: Settings, limit_gb: float, *, fresh: bool = False) -> Usage:
-    used = used_bytes(settings, fresh=fresh)
+def usage(limit_gb: float, used: int) -> Usage:
+    """Занятое `used` против лимита проекта `limit_gb`."""
     limit = int(limit_gb * GIB)
     fraction = used / limit if limit > 0 else 1.0
     return Usage(
@@ -86,20 +123,31 @@ def usage(settings: Settings, limit_gb: float, *, fresh: bool = False) -> Usage:
 
 
 class NoRoom(Exception):  # noqa: N818
-    """Файл не помещается в лимит диска проекта. Текст показывается человеку."""
+    """Файл не помещается в лимит проекта или на диск. Текст показывается человеку."""
 
 
-def ensure_room(settings: Settings, limit_gb: float, extra_bytes: int) -> None:
-    """Отказывает, если после добавления `extra_bytes` диск переполнится.
-
-    Диск делят файлы, превью, прокси и база, поэтому считаем занятое по факту, а не по размерам в
-    таблице. База лежит на том же диске: заполненный диск остановил бы не только загрузки.
-    """
-    current = usage(settings, limit_gb, fresh=True)
-    if current.used_bytes + max(0, extra_bytes) > current.limit_bytes:
-        free = max(0, current.limit_bytes - current.used_bytes)
+def ensure_room(
+    settings: Settings, db: Session, project_id: int, limit_gb: float, extra_bytes: int
+) -> None:
+    """Отказывает, если после `extra_bytes` переполнится лимит проекта или диск целиком."""
+    extra = max(0, extra_bytes)
+    used = project_used_bytes(settings, db, project_id, fresh=True)
+    limit = int(limit_gb * GIB)
+    if used + extra > limit:
+        free = max(0, limit - used)
         raise NoRoom(
             f"На диске не хватает места: свободно {free / GIB:.1f} ГБ из "
-            f"{current.limit_bytes / GIB:.1f} ГБ, а нужно {extra_bytes / GIB:.2f} ГБ. "
+            f"{limit / GIB:.1f} ГБ, а нужно {extra / GIB:.2f} ГБ. "
             "Удалите ненужные файлы или очистите корзину."
+        )
+    ensure_disk(settings, extra)
+
+
+def ensure_disk(settings: Settings, extra_bytes: int) -> None:
+    """Диск тарифа делят все проекты: что его переполнит, не принимаем (база лежит там же)."""
+    disk = int(settings.disk_total_gb * GIB)
+    if used_bytes(settings, fresh=True) + max(0, extra_bytes) > disk:
+        raise NoRoom(
+            "На диске сайта не хватает места: его делят все проекты. "
+            "Освободите место или напишите владельцу сайта."
         )

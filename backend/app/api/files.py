@@ -37,10 +37,6 @@ def _project_id(db: Session) -> int:
     return scope.current_project_id(db)
 
 
-def _project_limit_gb(db: Session) -> float:
-    return projects.current(db).storage_limit_gb
-
-
 def _raise(exc: uploads.UploadError) -> None:
     headers = {"Upload-Offset": str(exc.offset)} if exc.offset is not None else None
     raise HTTPException(exc.status, exc.detail, headers=headers) from exc
@@ -70,7 +66,8 @@ def init_upload(body: UploadInit, db: DbDep, actor: ActorDep) -> dict[str, Any]:
         _raise(exc)
     # Формат (415) и размер файла (413) проверены выше; последним — не переполнит ли он диск (507).
     try:
-        storage.ensure_room(get_settings(), _project_limit_gb(db), body.size)
+        project = projects.current(db)
+        storage.ensure_room(get_settings(), db, project.id, project.storage_limit_gb, body.size)
     except storage.NoRoom as exc:
         uploads.discard(get_settings(), upload_id)
         raise HTTPException(status.HTTP_507_INSUFFICIENT_STORAGE, str(exc)) from exc
