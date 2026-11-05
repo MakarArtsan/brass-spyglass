@@ -559,6 +559,24 @@ class ExportJob(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
+class ImportRun(Base):
+    """Импорт сценария: исходный текст ответа LLM (чтобы можно было посмотреть, что пришло),
+    кто и когда импортировал и сколько создано. Строка появляется только после успешного импорта."""
+
+    __tablename__ = "import_run"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("project.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(16), default="scenario")
+    schema_version: Mapped[str] = mapped_column(String(16))
+    filename: Mapped[str | None] = mapped_column(String(500), default=None)
+    source: Mapped[list[str]] = mapped_column(JSON, default=list)  # тексты как пришли, по частям
+    created: Mapped[dict[str, int]] = mapped_column(JSON, default=dict)  # что создано, по видам
+    warnings: Mapped[list[str]] = mapped_column(JSON, default=list)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("user.id"), default=None)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
 # Сущности, поддерживающие привязку файлов, комментариев и задач.
 ENTITY_TABLES: dict[str, type[Base]] = {
     EntityType.PROJECT.value: Project,

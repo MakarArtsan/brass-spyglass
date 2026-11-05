@@ -25,6 +25,7 @@ class AbilitiesOut(BaseModel):
     manage_users: bool
     restore: bool
     edit_project: bool
+    import_scenario: bool
 
 
 class MeOut(BaseModel):

@@ -6,6 +6,7 @@ Pydantic-моделей, по которым проверяется файл, п
 """
 
 import json
+import re
 from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
@@ -86,6 +87,5 @@ def render(params: PromptParams) -> str:
         "example_json": fragment_text(),
     }
     text = TEMPLATE.read_text(encoding="utf-8")
-    for key, value in values.items():
-        text = text.replace("{{" + key + "}}", value)
-    return text
+    # За один проход: подстановка не должна сама стать шаблоном (в названии бывает «{{…}}»).
+    return re.sub(r"\{\{(\w+)\}\}", lambda m: values.get(m.group(1), m.group(0)), text)

@@ -6,6 +6,7 @@
 """
 
 from collections import Counter
+from collections.abc import Iterable
 from typing import Any
 
 from app.constants import (
@@ -271,6 +272,33 @@ def to_bundle(doc: S.ScenarioDoc) -> Bundle:
             )
         )
     return bundle
+
+
+def exclude_codes(doc: S.ScenarioDoc, codes: Iterable[str]) -> S.ScenarioDoc:
+    """Копия файла без отмеченных в предпросмотре «не импортировать» персонажей, локаций и ассетов.
+
+    Ссылки на них убираются отовсюду (локации сцен, ассеты и состояния шотов, коды вопросов),
+    а реплика исключённого персонажа остаётся: говорящий записывается именем, а не кодом."""
+    skip = set(codes)
+    result = doc.model_copy(deep=True)
+    if not skip:
+        return result
+    names = {c.code: c.name for c in (*result.characters, *result.locations, *result.assets)}
+    result.characters = [c for c in result.characters if c.code not in skip]
+    result.locations = [c for c in result.locations if c.code not in skip]
+    result.assets = [c for c in result.assets if c.code not in skip]
+    for scene in result.scenes:
+        scene.location_codes = [c for c in scene.location_codes if c not in skip]
+        for shot in scene.shots:
+            shot.asset_codes = [c for c in shot.asset_codes if c not in skip]
+            shot.asset_states = {c: n for c, n in shot.asset_states.items() if c not in skip}
+            for line in shot.dialogue:
+                if line.character in skip:
+                    line.speaker = line.speaker or names[line.character]
+                    line.character = None
+    for question in result.open_questions:
+        question.related = [c for c in question.related if c not in skip]
+    return result
 
 
 def counts(doc: S.ScenarioDoc) -> Counter[str]:

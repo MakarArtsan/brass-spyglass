@@ -113,6 +113,7 @@ def project_me(ctx: access.CtxDep, db: Annotated[Session, Depends(get_db)]) -> M
             manage_users=permissions.can_manage_users(actor),
             restore=permissions.can_restore(actor),
             edit_project=permissions.can_edit_project(actor),
+            import_scenario=permissions.can_import(actor),
         ),
     )
 

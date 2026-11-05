@@ -69,10 +69,12 @@ backend/app/
   xlsx_reader.py            чтение Excel-трекера по заголовкам колонок → Bundle (без записи в БД)
   scenario/                 импорт сценария из JSON, который отдаёт LLM по скачанному промпту (без записи в БД):
                             schema (Pydantic, схема 1.0 — единственный источник), check (разбор, автопоправки, ошибки
-                            по-русски, части), convert (→ Bundle), prompt + import-prompt.md, example-brass-spyglass.json
+                            по-русски, части), convert (→ Bundle, исключения), preview (данные для экрана), prompt +
+                            import-prompt.md, example-brass-spyglass.json
   services/                 ЕДИНСТВЕННОЕ место записи в БД; каждое изменение пишет `activity`
     core.py                 общие операции: создание/правка/удаление/смена статуса, журнал
     importing.py, seed.py   запись Bundle из Excel; автоимпорт сида на пустой БД
+    scenario_import.py      импорт сценария: проверка, создание одной транзакцией в пустой проект, `import_run`
     ordering.py, links.py   порядок сцен/шотов; привязки шот↔ассет и файл↔карточка
     files.py, jobs.py       файлы (дубли по sha256, метаданные, ссылки) и очередь фоновых задач
     telegram.py             индекс чата и импорт выбранного в карточки (вся запись в БД по Telegram)
@@ -88,7 +90,7 @@ backend/app/
   api/access.py             `project_access`: slug из адреса → членство и роль → проект сессии; чужое и нет такого — 404
   api/                      роутеры FastAPI: entities, files (загрузка, версии, медиатека, ссылки), dashboard,
                             events (SSE), telegram (окно «Добавить из Telegram»), animatic, exports,
-                            notifications, serialize
+                            notifications, scenario_import (промпт, проверка, создание), serialize
   main.py                   lifespan: миграции → проект → сид → Telegram → воркер; раздача React
 backend/seed/               Krivoe_zerkalo_tracker.xlsx — стартовые данные
 backend/scripts/            import_xlsx.py, dev_session.py, make_session.py
@@ -182,7 +184,8 @@ frontend/e2e/               Playwright (desktop 1440 + phone 390); fixtures.ts, 
   проверки файла. Ошибка — только то, без чего проект не создать (нет поля, чужое значение справочника, ссылка на
   необъявленный код); хронометраж, суммы и догадки LLM — предупреждения. Автопоправки только однозначные и всегда
   показываются. Запись — тем же `importing.apply_bundle`, что и Excel. Меняете схему — обновите пример
-  (`scripts/make_scenario_example.py`) и `import-prompt.md`.
+  (`scripts/make_scenario_example.py`) и `import-prompt.md`. Создание — только в пустой проект (в т. ч. без удалённого
+  в корзине), одной транзакцией запроса; права и пустоту проверяет сервис, файл перепроверяется на сервере.
 - **Миграции не импортируют код приложения** (см. `0001`): типы только из `sqlalchemy`.
   Миграции, которые пересоздают таблицу (`batch_alter_table`: меняют CHECK или колонку), **проверяются на базе с
   данными**, где на таблицу ссылаются другие (см. `test_migrations.py`): на пустой базе они проходят, а на боевой

@@ -76,6 +76,7 @@ export interface Abilities {
   manage_users: boolean
   restore: boolean
   edit_project: boolean
+  import_scenario: boolean
 }
 
 export interface Me {
