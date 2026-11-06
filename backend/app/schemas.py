@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, StringConstraints
 
@@ -103,6 +103,9 @@ class ProjectCreate(BaseModel):
 class ChatOut(BaseModel):
     id: int
     title: str
+    # Кто будет собирать медиа чата: бот (чат подключён командой /connect) или юзербот.
+    via: Literal["bot", "userbot"] = "userbot"
+    bot_admin: bool | None = None  # у чатов бота: права ли у него, без них файлов он не получит
 
 
 class UserbotOut(BaseModel):
@@ -110,6 +113,12 @@ class UserbotOut(BaseModel):
 
     username: str | None
     name: str | None
+
+
+class BotOut(BaseModel):
+    """Бот сайта: его добавляют в чат проекта и присылают ему /connect."""
+
+    username: str | None
 
 
 class PendingOut(BaseModel):
@@ -130,8 +139,9 @@ class DecisionOut(BaseModel):
 
 
 class AvailableChatsOut(BaseModel):
-    ready: bool  # False — юзербот недоступен, список выдать нельзя (причина в `message`)
+    ready: bool  # False — ни бот, ни юзербот недоступны, список выдать нельзя (причина в `message`)
     userbot: UserbotOut | None
+    bot: BotOut | None = None
     chats: list[ChatOut]
     message: str | None = None
 

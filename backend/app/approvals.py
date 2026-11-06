@@ -14,7 +14,9 @@ from fastapi import FastAPI
 
 from app import db as database
 from app import models
+from app.auth.telegram import MSG_PROJECT_COLLECTING, MSG_PROJECT_REJECTED
 from app.config import get_settings
+from app.constants import Collector
 from app.services import core, projects
 
 log = logging.getLogger(__name__)
@@ -34,6 +36,7 @@ class _Applied:
     outcome: Outcome
     chat_id: int | None
     owner_tg_ids: list[int]
+    by_bot: bool  # чат собирает бот: ему есть что сказать людям в самом чате
 
 
 def _apply(action: Action, project_id: int, user_id: int) -> _Applied:
@@ -49,7 +52,12 @@ def _apply(action: Action, project_id: int, user_id: int) -> _Applied:
         else:
             chat = projects.reject(db, user, project, settings)
         owner_ids = [o.tg_id for o in projects.owners(db, project) if o.tg_id is not None]
-        applied = _Applied(Outcome(project.title, project.slug, action), chat, owner_ids)
+        applied = _Applied(
+            Outcome(project.title, project.slug, action),
+            chat,
+            owner_ids,
+            project.collector == Collector.BOT.value,
+        )
         db.commit()
         return applied
 
@@ -75,4 +83,7 @@ async def decide(app: FastAPI, action: Action, project_id: int, user_id: int) ->
             log.exception("индексатор чата %s не переключён", applied.chat_id)
     for tg_id in applied.owner_tg_ids:
         await app.state.tg.notify(tg_id, message_for(applied.outcome))
+    if applied.by_bot and applied.chat_id is not None:
+        text = MSG_PROJECT_COLLECTING if action == "approve" else MSG_PROJECT_REJECTED
+        await app.state.tg.say_in_chat(applied.chat_id, text.format(title=applied.outcome.title))
     return applied.outcome

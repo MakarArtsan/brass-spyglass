@@ -30,7 +30,7 @@ from app.auth.membership import (
 from app.auth.tokens import LoginTokenStore
 from app.config import Settings
 from app.permissions import PermissionDenied
-from app.services import core, members, users
+from app.services import bot_chats, core, members, projects, users
 
 log = logging.getLogger(__name__)
 
@@ -40,6 +40,7 @@ SYNC_RETRY_SEC = 600  # не все чаты прочитались — повт
 EVENT_DEBOUNCE_SEC = 5.0  # несколько вступлений подряд — одно чтение списка
 
 START_RE = re.compile(r"^/start(?:@\w+)?(?:\s+(\S+))?\s*$")
+CONNECT_RE = re.compile(r"^/connect(?:@(\w+))?\s*$", re.IGNORECASE)
 
 MSG_HELLO = (
     "Это бот входа на сайт The Brass Spyglass. Откройте сайт и нажмите «Войти через Telegram»."
@@ -50,6 +51,36 @@ MSG_EXPIRED = (
 MSG_NOT_MEMBER = "Доступ только для участников закрытого чата команды."
 MSG_UNAVAILABLE = "Не удалось проверить участие в чате. Попробуйте ещё раз через минуту."
 MSG_OK = "Готово, {name}! Вы вошли на сайт — вернитесь в браузер."
+
+# --- подключение чата проекта (бот-сборщик) ---
+MSG_CONNECT_HOW = (
+    "Чтобы я собирал фото, видео и документы вашего проекта, добавьте меня в закрытый чат команды, "
+    "сделайте администратором (права можно не давать) и отправьте там команду /connect."
+)
+MSG_CONNECT_ONLY_ADMIN = "Подключить чат к сайту может только администратор этого чата."
+MSG_CONNECT_UNKNOWN_ADMIN = (
+    "Не получилось проверить, что вы администратор чата. Сделайте меня администратором "
+    "(Управление чатом → Администраторы) и отправьте /connect ещё раз."
+)
+MSG_CONNECT_BOUND = "Этот чат уже подключён к проекту «{title}»."
+MSG_CONNECTED = (
+    "Чат подключён. Откройте сайт → «Новый проект» и выберите этот чат. После создания проект "
+    "подтверждает владелец сайта, до этого я ничего не сохраняю. Присланное раньше я не вижу: "
+    "только то, что пришлют после подтверждения."
+)
+MSG_BOT_NOT_ADMIN = (
+    "Сейчас я не администратор чата, поэтому до меня доходят одни команды, а файлы — нет. "
+    "Сделайте меня администратором (права можно не давать), иначе собирать ничего не смогу."
+)
+MSG_PROJECT_WAITING = (
+    "Проект «{title}» создан и ждёт подтверждения владельцем сайта. Пока он не подтвердит, "
+    "я ничего не сохраняю."
+)
+MSG_PROJECT_COLLECTING = (
+    "Проект «{title}» подтверждён. С этой минуты я сохраняю фото, видео и документы из этого "
+    "чата в медиатеку проекта. Всё, что прислали раньше, я не вижу."
+)
+MSG_PROJECT_REJECTED = "Заявка на проект «{title}» отклонена: я ничего из этого чата не сохраняю."
 
 
 def explain_userbot_error(exc: BaseException) -> str:
@@ -138,6 +169,12 @@ class TelegramService:
             me = await self.bot.get_me()
             self.bot_username = self.bot_username or (me.username or "")
             self.bot.add_event_handler(self._on_message, events.NewMessage(incoming=True))
+            self.bot.add_event_handler(
+                self._on_connect,
+                events.NewMessage(
+                    incoming=True, func=lambda e: bool(CONNECT_RE.match(e.raw_text or ""))
+                ),
+            )
             self.bot.add_event_handler(self._on_callback, events.CallbackQuery)
         except Exception:
             log.exception("не удалось запустить бота входа")
@@ -229,6 +266,9 @@ class TelegramService:
     async def _on_message(self, event: events.NewMessage.Event) -> None:
         if not event.is_private:
             return
+        if CONNECT_RE.match(event.raw_text or ""):
+            await event.respond(MSG_CONNECT_HOW)  # команду шлют в чате проекта, а не боту в личку
+            return
         match = START_RE.match(event.raw_text or "")
         if match is None:
             await event.respond(MSG_HELLO)
@@ -264,6 +304,81 @@ class TelegramService:
                     await event.respond(MSG_OK.format(name=result.name))
                 else:
                     await event.respond(MSG_EXPIRED)
+
+    # --- подключение чата проекта: /connect ---------------------------------------------------
+
+    async def _on_connect(self, event: events.NewMessage.Event) -> None:
+        """Администратор чата прислал боту `/connect`: запоминаем чат, чтобы из него можно было
+        создать проект. Права проверяет Telegram (`get_permissions`), а не мы."""
+        if event.is_private or self.bot is None:
+            return
+        match = CONNECT_RE.match(event.raw_text or "")
+        addressed = match.group(1).lower() if match and match.group(1) else None
+        if match is None or (addressed and addressed != self.bot_username.lower()):
+            return  # команда адресована другому боту этого чата
+        try:
+            chat, sender = await event.get_chat(), await event.get_sender()
+            sender_admin = await self._is_admin(chat, sender)
+            bot_admin = await self._is_admin(chat, await self.bot.get_me())
+        except Exception:
+            log.warning("не удалось проверить права при /connect: %s", event.chat_id, exc_info=True)
+            await event.respond(MSG_CONNECT_UNKNOWN_ADMIN)
+            return
+        reply = await asyncio.to_thread(
+            self.connect_chat,
+            chat_id=event.chat_id,
+            title=getattr(chat, "title", None) or str(event.chat_id),
+            forum=bool(getattr(chat, "forum", False)),
+            sender_tg_id=int(sender.id),
+            sender_admin=sender_admin,
+            bot_admin=bot_admin,
+        )
+        await event.respond(reply)
+
+    async def _is_admin(self, chat: object, user: object) -> bool:
+        rights = await self.bot.get_permissions(chat, user)  # type: ignore[union-attr]
+        return bool(rights.is_admin or rights.is_creator)
+
+    def connect_chat(
+        self,
+        *,
+        chat_id: int,
+        title: str,
+        forum: bool,
+        sender_tg_id: int,
+        sender_admin: bool,
+        bot_admin: bool,
+    ) -> str:
+        """Что отвечает бот на `/connect` (запись в базу — через сервис)."""
+        if not sender_admin:
+            return MSG_CONNECT_ONLY_ADMIN
+        try:
+            with database.session_factory()() as session:
+                bot_chats.connect(
+                    session,
+                    chat_id=chat_id,
+                    title=title,
+                    tg_id=sender_tg_id,
+                    bot_admin=bot_admin,
+                    forum=forum,
+                )
+                session.commit()
+        except core.ConflictError:
+            with database.session_factory()() as session:
+                project = projects.get_by_chat(session, chat_id)
+                return MSG_CONNECT_BOUND.format(title=project.title if project else "")
+        return MSG_CONNECTED if bot_admin else f"{MSG_CONNECTED}\n\n{MSG_BOT_NOT_ADMIN}"
+
+    async def say_in_chat(self, chat_id: int, text: str) -> bool:
+        """Бот пишет в чат проекта. Не вышло (убрали из чата) — не страшно: то же видно на сайте."""
+        if self.bot is None:
+            return False
+        try:
+            await self.bot.send_message(chat_id, text)  # type: ignore[arg-type]
+            return True
+        except Exception:
+            log.warning("не удалось написать в чат %s", chat_id, exc_info=True)
+            return False
 
     # --- личные сообщения и кнопки ---------------------------------------------------------------
 

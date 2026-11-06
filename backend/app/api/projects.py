@@ -17,11 +17,13 @@ from app import db as database
 from app.api import access
 from app.auth import session
 from app.auth.membership import ChatInfo, MembershipUnavailable
+from app.auth.telegram import MSG_PROJECT_COLLECTING, MSG_PROJECT_WAITING
 from app.config import get_settings
-from app.constants import Role
+from app.constants import Collector, Role
 from app.permissions import PermissionDenied
 from app.schemas import (
     AvailableChatsOut,
+    BotOut,
     ChatOut,
     DecisionOut,
     PendingOut,
@@ -29,7 +31,7 @@ from app.schemas import (
     ProjectCreate,
     UserbotOut,
 )
-from app.services import core, projects
+from app.services import bot_chats, core, projects
 
 log = logging.getLogger(__name__)
 
@@ -52,7 +54,12 @@ def _context(user_id: int) -> tuple[int | None, bool, set[int]]:
         return user.tg_id, projects.can_create(db, user), bound
 
 
-def _create(user_id: int, body: ProjectCreate, chat: ChatInfo | None) -> ProjectBrief:
+def _create(
+    user_id: int,
+    body: ProjectCreate,
+    chat: ChatInfo | None,
+    collector: Collector = Collector.USERBOT,
+) -> ProjectBrief:
     with database.session_factory()() as db:
         user = db.get(models.User, user_id)
         assert user is not None
@@ -63,6 +70,7 @@ def _create(user_id: int, body: ProjectCreate, chat: ChatInfo | None) -> Project
             title_en=body.title_en,
             deadline=body.deadline,
             chat_id=chat.id if chat else None,
+            collector=collector,
             settings=get_settings(),
         )
         db.commit()
@@ -85,6 +93,7 @@ async def _after_create(app: FastAPI, slug: str, chat_id: int) -> None:
         if project is None:
             return
         project_id, title, approved = project.id, project.title, project.approved_at is not None
+        by_bot = project.collector == Collector.BOT.value
         owner = next(iter(projects.owners(db, project)), None)
         who = (
             f"{owner.name} (@{owner.tg_username})"
@@ -100,6 +109,9 @@ async def _after_create(app: FastAPI, slug: str, chat_id: int) -> None:
                 log.exception("индексатор чата %s не запущен", chat_id)
     else:
         await app.state.tg.announce_request(project_id, title, who)
+    if by_bot:  # человек в чате должен понять, что произошло и когда бот начнёт собирать
+        text = MSG_PROJECT_COLLECTING if approved else MSG_PROJECT_WAITING
+        await app.state.tg.say_in_chat(chat_id, text.format(title=title))
     try:
         await app.state.tg.sync_project(project_id, chat_id)
     except Exception:
@@ -110,36 +122,71 @@ def _forbidden() -> HTTPException:
     return HTTPException(status.HTTP_403_FORBIDDEN, "Новые проекты вам недоступны")
 
 
+def _bot_chats(tg_id: int, bound: set[int]) -> list[ChatOut]:
+    """Чаты, подключённые боту этим человеком (владельцу сайта — любые)."""
+    with database.session_factory()() as db:
+        rows = bot_chats.available(
+            db, tg_id, superadmin=get_settings().is_superadmin(tg_id), exclude=bound
+        )
+        return [
+            ChatOut(id=r.chat_id, title=r.title, via="bot", bot_admin=r.bot_admin) for r in rows
+        ]
+
+
+def _bot_chat_for(tg_id: int, chat_id: int) -> ChatInfo | None:
+    with database.session_factory()() as db:
+        row = bot_chats.usable_by(
+            db, tg_id, chat_id, superadmin=get_settings().is_superadmin(tg_id)
+        )
+        return ChatInfo(row.chat_id, row.title) if row is not None else None
+
+
 @router.get("/available-chats", response_model=AvailableChatsOut)
-async def available_chats(request: Request, user: UserDep) -> AvailableChatsOut:
-    """Чаты, где есть и юзербот, и вы (администратором) и которые ещё не заняты проектом."""
+async def available_chats(
+    request: Request, user: UserDep, userbot: bool = True
+) -> AvailableChatsOut:
+    """Чаты, из которых можно создать проект и которые ещё не заняты: подключённые боту командой
+    `/connect` (список мгновенный) и чаты, где есть юзербот и вы администратор (просмотр долгий,
+    его можно отложить: `userbot=false`). Один чат в обоих списках показывается как чат бота."""
     tg_id, allowed, bound = await asyncio.to_thread(_context, user.id)
     if not allowed:
         raise _forbidden()
     tg = request.app.state.tg
     account = UserbotOut(**tg.userbot_account) if tg.userbot_account else None
-    if tg.userbot is None or tg_id is None:
+    bot = BotOut(username=tg.bot_username or None) if tg.bot is not None else None
+    mine = await asyncio.to_thread(_bot_chats, tg_id, bound) if bot and tg_id else []
+    scanned: list[ChatInfo] = []
+    failed = False
+    if userbot and tg.userbot is not None and tg_id is not None:
+        try:
+            scanned = await asyncio.wait_for(
+                tg.membership.manageable_chats(tg_id, bound), SCAN_TIMEOUT_SEC
+            )
+        except (MembershipUnavailable, TimeoutError):
+            failed = True
+    elif tg.userbot is None and not bot:
         return AvailableChatsOut(
             ready=False,
             userbot=account,
             chats=[],
             message="Подключение к Telegram сейчас недоступно. Попробуйте позже.",
         )
-    try:
-        chats = await asyncio.wait_for(
-            tg.membership.manageable_chats(tg_id, bound), SCAN_TIMEOUT_SEC
-        )
-    except (MembershipUnavailable, TimeoutError):
+    if failed and not mine:
         return AvailableChatsOut(
             ready=False,
             userbot=account,
+            bot=bot,
             chats=[],
             message="Telegram не ответил. Подождите минуту и обновите список.",
         )
+    seen = {c.id for c in mine}
+    chats = mine + [ChatOut(id=c.id, title=c.title) for c in scanned if c.id not in seen]
     return AvailableChatsOut(
         ready=True,
         userbot=account,
-        chats=[ChatOut(id=c.id, title=c.title) for c in chats],
+        bot=bot,
+        chats=chats,
+        message="Список чатов юзербота получить не удалось." if failed else None,
     )
 
 
@@ -151,29 +198,43 @@ async def create_project(
     if not allowed:
         raise _forbidden()
     chat: ChatInfo | None = None
+    collector = Collector.USERBOT
     if body.chat_id is not None:
         tg = request.app.state.tg
-        if tg.userbot is None or tg_id is None:
+        if tg_id is None or (tg.userbot is None and tg.bot is None):
             raise HTTPException(
                 status.HTTP_503_SERVICE_UNAVAILABLE,
                 "Подключение к Telegram недоступно: чат проверить нельзя. Попробуйте позже.",
             )
-        superadmin = get_settings().is_superadmin(tg_id)
-        try:
-            chat = await asyncio.wait_for(
-                tg.membership.chat_for(tg_id, body.chat_id, require_admin=not superadmin),
-                CHECK_TIMEOUT_SEC,
-            )
-        except (MembershipUnavailable, TimeoutError):
-            raise HTTPException(
-                status.HTTP_503_SERVICE_UNAVAILABLE, "Telegram не ответил. Попробуйте ещё раз."
-            ) from None
-        if chat is None:
+        # Чат, подключённый боту, собирает бот; иначе — прежний путь через юзербота.
+        if tg.bot is not None:
+            chat = await asyncio.to_thread(_bot_chat_for, tg_id, body.chat_id)
+        if chat is not None:
+            collector = Collector.BOT
+        elif tg.userbot is None:
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,
-                "Вы не администратор этого чата, или аккаунт юзербота не добавлен в него.",
+                "Этот чат не подключён: добавьте бота в чат, сделайте его администратором и "
+                "отправьте в чате команду /connect.",
             )
-    brief = await asyncio.to_thread(_create, user.id, body, chat)
+        else:
+            superadmin = get_settings().is_superadmin(tg_id)
+            try:
+                chat = await asyncio.wait_for(
+                    tg.membership.chat_for(tg_id, body.chat_id, require_admin=not superadmin),
+                    CHECK_TIMEOUT_SEC,
+                )
+            except (MembershipUnavailable, TimeoutError):
+                raise HTTPException(
+                    status.HTTP_503_SERVICE_UNAVAILABLE,
+                    "Telegram не ответил. Попробуйте ещё раз.",
+                ) from None
+            if chat is None:
+                raise HTTPException(
+                    status.HTTP_403_FORBIDDEN,
+                    "Вы не администратор этого чата, или аккаунт юзербота не добавлен в него.",
+                )
+    brief = await asyncio.to_thread(_create, user.id, body, chat, collector)
     if chat is not None:
         background.add_task(_after_create, request.app, brief.slug, chat.id)
     return brief
