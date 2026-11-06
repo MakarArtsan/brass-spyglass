@@ -43,6 +43,10 @@ export interface TgStatus {
   /** Почему юзербот не подключился (по-русски, с тем, что делать). */
   userbot_error: string | null
   chat_id: number | null
+  /** Кто собирает медиа чата: юзербот (фильм) или бот (новые проекты). Нет в старых ответах. */
+  collector?: 'userbot' | 'bot'
+  /** Права бота в чате на момент /connect; null — собирает юзербот. */
+  bot_admin?: boolean | null
   syncing: boolean
   phase: string
   topic: string | null

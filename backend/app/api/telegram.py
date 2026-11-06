@@ -16,10 +16,10 @@ from app import models, permissions, scope, signing, tglinks
 from app.api.entities import ActorDep, DbDep
 from app.auth import session
 from app.config import get_settings
-from app.constants import JobStatus, JobType, Purpose
+from app.constants import Collector, JobStatus, JobType, Purpose
 from app.db import utcnow
 from app.permissions import Actor
-from app.services import projects
+from app.services import bot_chats, projects
 from app.services import telegram as tg_service
 from app.services.core import NotFoundError
 from app.tg import previews, runtime
@@ -91,13 +91,21 @@ def _item(db: Session, row: models.TgMedia) -> dict[str, Any]:
 @router.get("/status")
 def tg_status(db: DbDep, request: Request) -> dict[str, Any]:
     settings = get_settings()
-    chat = projects.current(db).tg_chat_id
+    project = projects.current(db)
+    chat = project.tg_chat_id
+    by_bot = project.collector == Collector.BOT.value
+    # У бота нет сессии юзербота: «настроено» для него — ключи Telegram и привязанный чат.
+    configured = settings.telegram_configured if by_bot else bool(settings.tg_session)
+    bot_chat = bot_chats.get(db, chat) if by_bot and chat is not None else None
     mine = runtime.gateway_for(chat) is not None
     indexer = runtime.indexer_for(chat)
     state = indexer.state if indexer else None
     overview = tg_service.overview(db, chat) if chat is not None else None
     return {
-        "configured": bool(settings.tg_session and chat is not None),
+        "configured": bool(configured and chat is not None),
+        "collector": project.collector,
+        # Права бота в чате на момент /connect (позже могли измениться); None — собирает юзербот.
+        "bot_admin": bot_chat.bot_admin if bot_chat is not None else None,
         "connected": mine,
         "userbot_error": getattr(request.app.state.tg, "userbot_error", None),
         "chat_id": chat,

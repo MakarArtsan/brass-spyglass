@@ -17,11 +17,12 @@ export default function Telegram() {
   if (perms.role === 'guest') return <p className="text-fog">{ru.tg.guestNote}</p>
 
   const phase = status?.phase ? ru.tg.phases[status.phase] : ''
+  const byBot = status?.collector === 'bot'
   return (
     <div className="space-y-6">
       <PageHeader
         title={ru.tg.screenTitle}
-        lead={ru.tg.screenLead}
+        lead={byBot ? ru.tg.screenLeadBot : ru.tg.screenLead}
         actions={
           perms.role === 'owner' && (
             <Button
@@ -40,14 +41,30 @@ export default function Telegram() {
       {status && (
         <section className="panel grid gap-4 p-4 sm:grid-cols-2">
           <div>
-            <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-fog">{ru.tg.connection}</h2>
+            <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-fog">{byBot ? ru.tg.connectionBot : ru.tg.connection}</h2>
             <p className={cn('mt-1 text-lg font-semibold', status.connected ? 'text-status-done' : 'text-alert')}>
               {status.connected ? ru.tg.connected : ru.tg.notConnected}
             </p>
             {!status.connected && (
-              <p className="mt-1 text-sm text-fog">{status.configured ? (status.userbot_error ? null : ru.tg.notConnectedHint) : ru.tg.notConfigured}</p>
+              <p className="mt-1 text-sm text-fog">
+                {status.configured
+                  ? status.userbot_error && !byBot
+                    ? null
+                    : byBot
+                      ? ru.tg.notConnectedHintBot
+                      : ru.tg.notConnectedHint
+                  : byBot
+                    ? ru.tg.notConfiguredBot
+                    : ru.tg.notConfigured}
+              </p>
             )}
-            {!status.connected && status.userbot_error && (
+            {byBot && <p className="mt-1 text-sm text-fog">{ru.tg.botNote}</p>}
+            {byBot && status.bot_admin === false && (
+              <p className="mt-1 text-sm text-status-in_progress" role="alert">
+                {ru.tg.botNotAdmin}
+              </p>
+            )}
+            {!byBot && !status.connected && status.userbot_error && (
               <p className="mt-1 text-sm text-alert" role="alert">
                 {ru.tg.notConnectedReason}: {status.userbot_error}
               </p>
@@ -76,7 +93,7 @@ export default function Telegram() {
 
       <section aria-label={ru.tg.topicTable}>
         <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-fog">{ru.tg.topicTable}</h2>
-        {topics && topics.length === 0 && <p className="text-sm text-fog">{ru.tg.noTopics}</p>}
+        {topics && topics.length === 0 && <p className="text-sm text-fog">{byBot ? ru.tg.noTopicsBot : ru.tg.noTopics}</p>}
         <ul className="divide-y divide-line rounded-xl border border-line">
           {topics?.map((t) => (
             <li key={t.topic_id} className="flex min-h-[56px] flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2">

@@ -295,6 +295,42 @@ test.describe('экран «Telegram»', () => {
     await expect(page.getByRole('alert').filter({ hasText: 'Причина:' })).toContainText('с двух мест одновременно')
   })
 
+  test('чат собирает бот: подпись, оговорка про историю, предупреждение о правах', async ({ page, asRole }) => {
+    await asRole('owner')
+    await mockTelegram(page)
+    await page.route((url) => url.pathname === '/api/p/brass-spyglass/tg/status', (route) =>
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          configured: true, connected: false, collector: 'bot', bot_admin: false, chat_id: -1001110000001, syncing: false,
+          phase: 'idle', topic: null, thumbs_left: 0, last_error: null, last_run_at: null, overview: null,
+        }),
+      }),
+    )
+    await page.route((url) => url.pathname === '/api/p/brass-spyglass/tg/topics', (route) => route.fulfill({ contentType: 'application/json', body: '[]' }))
+    await page.goto('/telegram')
+    await expect(page.getByText('Бот-сборщик')).toBeVisible()
+    await expect(page.getByText(/истории чата у него нет/)).toBeVisible()
+    await expect(page.getByText(/когда владелец сайта подтвердит проект/)).toBeVisible()
+    await expect(page.getByRole('alert').filter({ hasText: 'не был администратором чата' })).toBeVisible()
+    await expect(page.getByText(/бот видит только новые сообщения/)).toBeVisible() // тем ещё нет
+    await expect(page.getByText(/TG_SESSION/)).toHaveCount(0) // про юзербота здесь ни слова
+  })
+
+  test('бот не настроен: сказано, какие переменные задать', async ({ page, asRole }) => {
+    await asRole('owner')
+    await mockTelegram(page)
+    await page.route((url) => url.pathname === '/api/p/brass-spyglass/tg/status', (route) =>
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ configured: false, connected: false, collector: 'bot', bot_admin: null, chat_id: null, syncing: false, phase: 'idle', topic: null, thumbs_left: 0, last_error: null, last_run_at: null, overview: null }),
+      }),
+    )
+    await page.route((url) => url.pathname === '/api/p/brass-spyglass/tg/topics', (route) => route.fulfill({ contentType: 'application/json', body: '[]' }))
+    await page.goto('/telegram')
+    await expect(page.getByText(/TG_BOT_TOKEN/)).toBeVisible()
+  })
+
   test('гостю экран не показывается', async ({ page, asRole }) => {
     await asRole('guest')
     await page.goto('/telegram')
