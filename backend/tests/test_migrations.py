@@ -17,6 +17,15 @@ def _cfg() -> Config:
     return cfg
 
 
+def _head() -> str:
+    """Последняя миграция: тесты проверяют «база дошла до конца», а не конкретный номер."""
+    from alembic.script import ScriptDirectory
+
+    head = ScriptDirectory.from_config(_cfg()).get_current_head()
+    assert head is not None
+    return head
+
+
 def test_0002_renames_placeholder_values_and_enforces_new_checks(env):
     (env / "db").mkdir(parents=True)
     cfg = _cfg()
@@ -156,7 +165,7 @@ def test_0006_runs_on_a_database_where_other_tables_point_at_file_and_job(env):
 
     db = sqlite3.connect(path)
     db.execute("PRAGMA foreign_keys=ON")
-    assert db.execute("select version_num from alembic_version").fetchone() == ("0011",)  # head
+    assert db.execute("select version_num from alembic_version").fetchone() == (_head(),)  # head
     # данные на месте, ссылки целы
     assert db.execute("select id, original_name, no_compress from file").fetchall() == [
         (1, "a.png", 0)
@@ -209,7 +218,7 @@ def test_a_leftover_from_a_failed_migration_does_not_block_the_next_start(env):
     command.upgrade(_cfg(), "head")
 
     db = sqlite3.connect(path)
-    assert db.execute("select version_num from alembic_version").fetchone() == ("0011",)  # head
+    assert db.execute("select version_num from alembic_version").fetchone() == (_head(),)  # head
     left = db.execute("select name from sqlite_master where name like '_alembic_tmp%'").fetchall()
     assert left == []
     assert db.execute("select count(*) from file").fetchone() == (1,)
@@ -258,7 +267,7 @@ def test_0007_gives_projects_slugs_and_turns_users_into_members(env):
 
     db = sqlite3.connect(path)
     db.execute("PRAGMA foreign_keys=ON")
-    assert db.execute("select version_num from alembic_version").fetchone() == ("0011",)
+    assert db.execute("select version_num from alembic_version").fetchone() == (_head(),)
     assert db.execute("select slug, tg_chat_id, archived_at from project").fetchall() == [
         ("the-brass-spyglass", None, None)
     ]
@@ -390,6 +399,6 @@ def test_0008_drops_notifications_when_there_is_no_project_to_attach_them_to(env
     command.upgrade(_cfg(), "head")
 
     db = sqlite3.connect(path)
-    assert db.execute("select version_num from alembic_version").fetchone() == ("0011",)
+    assert db.execute("select version_num from alembic_version").fetchone() == (_head(),)
     assert db.execute("select count(*) from notification").fetchone() == (0,)
     db.close()

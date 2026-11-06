@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app import models, permissions, scope
 from app.config import Settings, get_settings
-from app.constants import Role
+from app.constants import Collector, Role
 from app.permissions import Actor, PermissionDenied
 from app.services import members
 from app.services.core import ConflictError, ValidationError, log_activity
@@ -162,6 +162,7 @@ def create(
     title_en: str | None = None,
     deadline: date | None = None,
     chat_id: int | None = None,
+    collector: Collector = Collector.USERBOT,
     settings: Settings | None = None,
     now: datetime | None = None,
 ) -> models.Project:
@@ -204,6 +205,7 @@ def create(
             "deadline_internal": internal,
             "storage_limit_gb": settings.new_project_storage_gb,
             "tg_chat_id": chat_id,
+            "collector": collector.value,
             # Свой проект суперадмина активен сразу; остальные ждут его подтверждения.
             "approved_at": now if approved else None,
             "approved_by": user.id if approved else None,

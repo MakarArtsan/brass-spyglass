@@ -372,7 +372,7 @@ def test_a_project_is_collected_by_the_userbot_unless_said_otherwise(db):
 
 
 def test_migration_0011_keeps_every_project_on_the_userbot_and_every_table_intact(env):
-    from tests.test_migrations import _cfg, _populated_0006  # noqa: PLC2701
+    from tests.test_migrations import _cfg, _head, _populated_0006  # noqa: PLC2701
 
     path = _populated_0006(env)
     command.upgrade(_cfg(), "0010")
@@ -389,7 +389,7 @@ def test_migration_0011_keeps_every_project_on_the_userbot_and_every_table_intac
 
     db = sqlite3.connect(path)
     db.execute("PRAGMA foreign_keys=ON")
-    assert db.execute("select version_num from alembic_version").fetchone() == ("0011",)
+    assert db.execute("select version_num from alembic_version").fetchone() == (_head(),)
     assert db.execute("select distinct collector from project").fetchall() == [("userbot",)]
     after = {t: db.execute(f"select count(*) from {t}").fetchone()[0] for t in before}
     assert after == before  # пересоздание таблицы project ничего не унесло

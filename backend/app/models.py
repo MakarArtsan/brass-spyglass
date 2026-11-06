@@ -585,6 +585,23 @@ class ImportRun(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
+class BotChat(Base):
+    """Чат, подключённый боту командой `/connect`: человек добавил бота в закрытый чат команды,
+    а бот проверил, что команду прислал администратор. К проекту не относится (его может ещё
+    не быть): при создании проекта чат берётся отсюда."""
+
+    __tablename__ = "bot_chat"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    chat_id: Mapped[int] = mapped_column(BigInteger, unique=True)
+    title: Mapped[str] = mapped_column(String(200))
+    connected_by_tg_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    # Без прав администратора бот видит одни команды и файлов из чата не получает.
+    bot_admin: Mapped[bool] = mapped_column(default=False)
+    forum: Mapped[bool] = mapped_column(default=False)
+    connected_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
 # Сущности, поддерживающие привязку файлов, комментариев и задач.
 ENTITY_TABLES: dict[str, type[Base]] = {
     EntityType.PROJECT.value: Project,
