@@ -3,9 +3,11 @@
 import asyncio
 import logging
 import time
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from dataclasses import dataclass
 from typing import Protocol
+
+from app.constants import Collector
 
 log = logging.getLogger(__name__)
 
@@ -70,6 +72,59 @@ class DisabledMembership:
         self, tg_id: int, chat_id: int, *, require_admin: bool = True
     ) -> ChatInfo | None:
         raise MembershipUnavailable("юзербот не подключён")
+
+
+class RoutedMembership:
+    """Чат проекта читает тот, кто его собирает: юзербот (фильм, старые проекты) или бот (новые).
+    Чат, которого нет среди проектов (поиск при создании проекта), читает юзербот. Поиск чатов и их
+    проверку при создании делает только юзербот: чаты бота известны из его собственных записей."""
+
+    def __init__(
+        self,
+        userbot: MembershipChecker,
+        bot: MembershipChecker,
+        collectors: Callable[[Collection[int]], dict[int, str]],
+    ) -> None:
+        self._userbot = userbot
+        self._bot = bot
+        self._collectors = collectors
+
+    async def _checker_for(self, chat_id: int) -> MembershipChecker:
+        kind = (await asyncio.to_thread(self._collectors, [chat_id])).get(chat_id)
+        return self._bot if kind == Collector.BOT.value else self._userbot
+
+    async def chats_of(self, tg_id: int, chat_ids: Collection[int]) -> dict[int, bool | None]:
+        kinds = await asyncio.to_thread(self._collectors, list(chat_ids))
+        groups: dict[bool, list[int]] = {False: [], True: []}
+        for chat_id in chat_ids:
+            groups[kinds.get(chat_id) == Collector.BOT.value].append(chat_id)
+        result: dict[int, bool | None] = {}
+        for by_bot, ids in groups.items():
+            if not ids:
+                continue
+            try:
+                result.update(await (self._bot if by_bot else self._userbot).chats_of(tg_id, ids))
+            except MembershipUnavailable:
+                # Эта половина не читается, другая — возможно.
+                result.update(dict.fromkeys(ids))
+        if result and all(state is None for state in result.values()):
+            raise MembershipUnavailable("не удалось прочитать ни один чат проекта")
+        return result
+
+    async def participants(self, chat_id: int) -> set[int]:
+        return await (await self._checker_for(chat_id)).participants(chat_id)
+
+    def forget(self, chat_id: int) -> None:
+        self._userbot.forget(chat_id)
+        self._bot.forget(chat_id)
+
+    async def manageable_chats(self, tg_id: int, exclude: Collection[int]) -> list[ChatInfo]:
+        return await self._userbot.manageable_chats(tg_id, exclude)
+
+    async def chat_for(
+        self, tg_id: int, chat_id: int, *, require_admin: bool = True
+    ) -> ChatInfo | None:
+        return await self._userbot.chat_for(tg_id, chat_id, require_admin=require_admin)
 
 
 class TelethonMembership:

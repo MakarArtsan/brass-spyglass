@@ -1,7 +1,10 @@
-"""Пул индексаторов: по шлюзу и индексатору на чат каждого проекта, поверх одного юзербота.
+"""Пул индексаторов: по шлюзу и индексатору на чат каждого проекта.
 
-Запросы всех чатов идут через один `RateLimiter` (≤ 1 в секунду на аккаунт, а не на чат: иначе три
-проекта втроём упрутся во FloodWait), а файлы качаются по одному на весь аккаунт.
+Чат собирает либо юзербот (фильм и старые проекты: он читает и историю), либо бот (новые проекты:
+только то, что прислали после его появления в чате); кто именно — `project.collector`. У каждого
+клиента свой `RateLimiter` (≤ 1 запрос в секунду на аккаунт, а не на чат: иначе три проекта втроём
+упрутся во FloodWait) и свой замок: файлы клиента качаются по одному, а большие загрузки фильма не
+задерживают бота.
 """
 
 import asyncio
@@ -9,9 +12,12 @@ import logging
 import shutil
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
+from app import models
 from app.config import Settings
+from app.constants import Collector
 from app.tg import runtime
 from app.tg.indexer import Indexer
 from app.tg.limiter import RateLimiter
@@ -21,12 +27,14 @@ log = logging.getLogger(__name__)
 
 
 class IndexerPool:
-    def __init__(self, userbot: Any, sessions: sessionmaker[Session], settings: Settings) -> None:
-        self._userbot = userbot
+    def __init__(
+        self, userbot: Any, sessions: sessionmaker[Session], settings: Settings, *, bot: Any = None
+    ) -> None:
+        self._clients: dict[Collector, Any] = {Collector.USERBOT: userbot, Collector.BOT: bot}
+        self._limiters = {c: RateLimiter() for c in Collector}
+        self._locks = {c: asyncio.Lock() for c in Collector}
         self._sessions = sessions
         self._settings = settings
-        self._limiter = RateLimiter()
-        self._download_lock = asyncio.Lock()
         self._started: dict[int, Indexer] = {}
 
     async def start(self, chat_ids: list[int]) -> None:
@@ -35,21 +43,42 @@ class IndexerPool:
         )  # недокачанное с прошлого запуска
         runtime.loop = asyncio.get_running_loop()
         for chat_id in chat_ids:
-            await self.ensure(chat_id)
+            try:
+                await self.ensure(chat_id)
+            except Exception:  # один чат без клиента не должен остановить остальные
+                log.exception("индексатор чата %s не запущен", chat_id)
 
-    async def ensure(self, chat_id: int) -> Indexer:
-        """Запускает индексатор чата, если ещё не запущен (проекту привязали чат)."""
+    def _collector_of(self, chat_id: int) -> Collector:
+        with self._sessions() as db:
+            value = db.scalar(
+                select(models.Project.collector).where(models.Project.tg_chat_id == chat_id)
+            )
+        return Collector(value) if value else Collector.USERBOT
+
+    async def ensure(self, chat_id: int, collector: Collector | None = None) -> Indexer:
+        """Запускает индексатор чата, если ещё не запущен (проекту привязали чат). Кто собирает —
+        из проекта, если не сказано."""
         indexer = self._started.get(chat_id)
         if indexer is not None:
             return indexer
+        collector = collector or await asyncio.to_thread(self._collector_of, chat_id)
+        client = self._clients[collector]
+        if client is None:
+            raise RuntimeError(
+                "Бот не подключён" if collector is Collector.BOT else "Юзербот не подключён"
+            )
         gateway = TelethonGateway(
-            self._userbot, chat_id, self._limiter, download_lock=self._download_lock
+            client,
+            chat_id,
+            self._limiters[collector],
+            download_lock=self._locks[collector],
+            live_only=collector is Collector.BOT,
         )
         indexer = Indexer(gateway, self._sessions, self._settings)
         runtime.register(gateway, indexer)
         self._started[chat_id] = indexer
         await indexer.start()
-        log.info("индексатор Telegram запущен для чата %s", chat_id)
+        log.info("индексатор Telegram запущен для чата %s (%s)", chat_id, collector.value)
         return indexer
 
     async def remove(self, chat_id: int) -> None:

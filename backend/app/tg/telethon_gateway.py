@@ -14,7 +14,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
-from app.tg.limiter import RateLimiter
+from app.tg.limiter import RateLimiter, flood_seconds
 from app.tg.parse import parse_message
 from app.tg.types import GENERAL_TOPIC, HistoryItem, NewMessage, Progress, TopicInfo
 
@@ -31,6 +31,10 @@ def is_stale_reference(exc: BaseException) -> bool:
 
 
 class TelethonGateway:
+    """`live_only` — шлюз бота: у бота нет доступа к истории чата, он видит только сообщения,
+    пришедшие после его появления в чате. История пуста, темы берутся из известных и замеченных
+    в новых сообщениях; всё остальное (миниатюры, скачивание, новые сообщения) то же."""
+
     def __init__(
         self,
         client: Any,
@@ -38,9 +42,12 @@ class TelethonGateway:
         limiter: RateLimiter | None = None,
         *,
         download_lock: asyncio.Lock | None = None,
+        live_only: bool = False,
     ) -> None:
         self.client = client
         self.chat_id = chat_id
+        self.live_only = live_only
+        self._seen_topics: dict[int, str] = {}  # темы форума, замеченные в новых сообщениях
         self.limiter = limiter or RateLimiter()
         self._input: Any = None
         self._forum: bool | None = None
@@ -58,6 +65,11 @@ class TelethonGateway:
             try:
                 self._input = await self._call(lambda: self.client.get_input_entity(self.chat_id))
             except ValueError:
+                if self.live_only:
+                    # Боту список диалогов недоступен: чат он узнаёт из пришедших сообщений.
+                    raise LookupError(
+                        "Бот ещё не получал сообщений из этого чата или не состоит в нём"
+                    ) from None
                 await self._call(lambda: self.client.get_dialogs())  # прогрев кэша сущностей
                 self._input = await self._call(lambda: self.client.get_input_entity(self.chat_id))
         return self._input
@@ -101,13 +113,48 @@ class TelethonGateway:
     def _topic_of(self, msg: Any) -> int:
         """Тема сообщения: в форуме — id темы из reply_to, иначе «Общая»."""
         reply = getattr(msg, "reply_to", None)
-        if self._forum and reply is not None and getattr(reply, "forum_topic", False):
+        forum = self._forum if self._forum is not None else self.live_only  # бот мог не узнать
+        if forum and reply is not None and getattr(reply, "forum_topic", False):
             return int(getattr(reply, "reply_to_top_id", None) or reply.reply_to_msg_id)
         return GENERAL_TOPIC
 
     # --- Gateway -------------------------------------------------------------------------------
 
     async def topics(self) -> list[TopicInfo]:
+        if not self.live_only:
+            return await self._all_topics()
+        try:
+            found = await self._all_topics()
+        except Exception as exc:
+            if flood_seconds(exc) is not None:
+                raise
+            log.info("бот не получил список тем чата %s (%s): берём известные", self.chat_id, exc)
+            found = [TopicInfo(GENERAL_TOPIC, "Чат")]
+        known = {t.topic_id for t in found}
+        return found + [
+            TopicInfo(topic_id, title)
+            for topic_id, title in sorted(self._seen_topics.items())
+            if topic_id not in known
+        ]
+
+    async def _topic_title(self, topic_id: int) -> str:
+        """Название темы из сообщения: спрашиваем Telegram, не вышло — «Тема N»."""
+        from telethon.tl.functions.messages import GetForumTopicsByIDRequest
+
+        try:
+            chat = await self._chat()
+            request = GetForumTopicsByIDRequest(peer=chat, topics=[topic_id])
+            page = await self._call(lambda: self.client(request))
+            for topic in page.topics:
+                if topic.__class__.__name__ == "ForumTopic" and int(topic.id) == topic_id:
+                    return str(topic.title)
+        except Exception as exc:
+            if flood_seconds(exc) is not None:
+                raise
+            log.info("название темы %s чата %s не получено: %s", topic_id, self.chat_id, exc)
+        return f"Тема {topic_id}"
+
+    async def _all_topics(self) -> list[TopicInfo]:
         # В Telethon 1.45 запрос тем — в `messages` и принимает `peer` (не `channels` и `channel`).
         from telethon.tl.functions.messages import GetForumTopicsRequest
 
@@ -141,6 +188,8 @@ class TelethonGateway:
     async def history(
         self, topic_id: int, *, min_id: int = 0, max_id: int = 0, reverse: bool = False
     ) -> AsyncIterator[HistoryItem]:
+        if self.live_only:
+            return  # у бота истории нет
         chat = await self._chat()
         options: dict[str, Any] = {
             "min_id": min_id,
@@ -209,6 +258,8 @@ class TelethonGateway:
             msg = event.message
             self._remember(msg)
             topic = self._topic_of(msg)
+            if self.live_only and topic != GENERAL_TOPIC and topic not in self._seen_topics:
+                self._seen_topics[topic] = await self._topic_title(topic)
             await callback(HistoryItem(int(msg.id), parse_message(msg, topic)), topic)
 
         self.client.add_event_handler(handler, events.NewMessage(chats=self.chat_id))

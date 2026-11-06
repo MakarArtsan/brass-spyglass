@@ -128,9 +128,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 async def _start_indexers(app: FastAPI, settings: Settings) -> IndexerPool | None:
-    """По индексатору на чат каждого проекта; только если юзербот подключён (TG_SESSION)."""
-    userbot = app.state.tg.userbot
-    if userbot is None:
+    """По индексатору на чат каждого проекта; чат собирает юзербот (TG_SESSION) или бот проекта."""
+    userbot, bot = app.state.tg.userbot, app.state.tg.bot
+    if userbot is None and bot is None:
         return None
     with database.session_factory()() as db:
         chats = [
@@ -142,7 +142,7 @@ async def _start_indexers(app: FastAPI, settings: Settings) -> IndexerPool | Non
             )
             if c is not None
         ]  # чат неподтверждённого проекта не индексируем: сбор медиа — тоже «загрузка»
-    pool = IndexerPool(userbot, database.session_factory(), settings)
+    pool = IndexerPool(userbot, database.session_factory(), settings, bot=bot)
     await pool.start(chats)
     return pool
 

@@ -366,7 +366,7 @@ async def test_only_confirmed_live_projects_get_an_indexer_at_start(bound_chat, 
             started.append(sorted(chats))
 
     monkeypatch.setattr(main_module, "IndexerPool", Recorder)
-    app = SimpleNamespace(state=SimpleNamespace(tg=SimpleNamespace(userbot=object())))
+    app = SimpleNamespace(state=SimpleNamespace(tg=SimpleNamespace(userbot=object(), bot=None)))
     await main_module._start_indexers(app, get_settings())
     assert started == [[bound_chat]]  # только живой подтверждённый проект фильма
 
@@ -416,7 +416,7 @@ def test_a_repeated_get_of_the_session_does_not_change_the_queue(gate):
     assert first == gate.get("/api/session").json()["pending_count"] == 1
 
 
-async def test_the_pool_forgets_a_chat_that_was_rejected(env, monkeypatch):
+async def test_the_pool_forgets_a_chat_that_was_rejected(db, monkeypatch):
     from app.tg import pool as pool_module
     from app.tg import runtime
     from app.tg.indexer import Indexer
@@ -431,7 +431,6 @@ async def test_the_pool_forgets_a_chat_that_was_rejected(env, monkeypatch):
 
     monkeypatch.setattr(Indexer, "start", no_start)
     monkeypatch.setattr(Indexer, "stop", stop)
-    database.init_engine()
     pool = pool_module.IndexerPool(object(), database.session_factory(), get_settings())
     try:
         await pool.start([C1, C2])

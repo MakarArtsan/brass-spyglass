@@ -29,6 +29,7 @@ from app.constants import (
     DRUM_LEVEL_RANGE,
     FPS_CHOICES,
     AssetType,
+    Collector,
     CompressState,
     EntityType,
     ExportTarget,
@@ -114,7 +115,10 @@ def work_checks() -> tuple[CheckConstraint, ...]:
 
 class Project(Timestamps, Base):
     __tablename__ = "project"
-    __table_args__ = (CheckConstraint(f"fps IN ({', '.join(map(str, FPS_CHOICES))})", name="fps"),)
+    __table_args__ = (
+        CheckConstraint(f"fps IN ({', '.join(map(str, FPS_CHOICES))})", name="fps"),
+        CheckConstraint(check_in("collector", Collector), name="collector"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column(String(200))
@@ -135,6 +139,10 @@ class Project(Timestamps, Base):
     # Подтверждение суперадмином: пока его нет, команда проекта не загружает файлы.
     approved_at: Mapped[datetime | None] = mapped_column(UTCDateTime, default=None)
     approved_by: Mapped[int | None] = mapped_column(ForeignKey("user.id"), default=None)
+    # Кто собирает медиа чата: юзербот (у фильма и старых проектов) или бот (новые проекты).
+    collector: Mapped[str] = mapped_column(
+        String(8), default=Collector.USERBOT.value, server_default=Collector.USERBOT.value
+    )
 
     @property
     def approved(self) -> bool:
