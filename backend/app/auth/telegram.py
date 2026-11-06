@@ -10,7 +10,7 @@ import io
 import logging
 import re
 import struct
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Collection
 from pathlib import Path
 
 from sqlalchemy import select
@@ -24,6 +24,7 @@ from app.auth.membership import (
     DisabledMembership,
     MembershipChecker,
     MembershipUnavailable,
+    RoutedMembership,
     TelethonMembership,
 )
 from app.auth.tokens import LoginTokenStore
@@ -87,6 +88,17 @@ def explain_userbot_error(exc: BaseException) -> str:
     return f"{name}: {exc}" if str(exc) else name
 
 
+def collectors_of_chats(chat_ids: Collection[int]) -> dict[int, str]:
+    """Кто собирает чаты проектов: `userbot` или `bot` (чата нет среди проектов — его здесь нет)."""
+    with database.session_factory()() as session:
+        rows = session.execute(
+            select(models.Project.tg_chat_id, models.Project.collector).where(
+                models.Project.tg_chat_id.in_(list(chat_ids))
+            )
+        )
+        return {chat_id: collector for chat_id, collector in rows}
+
+
 class TelegramService:
     """Подключения к Telegram. Без ключей приложение работает, но войти нельзя."""
 
@@ -136,8 +148,21 @@ class TelegramService:
             await self._connect_userbot(s.tg_api_id, s.tg_session)
         else:
             log.warning("TG_SESSION не задана: членство в чатах проектов не проверяется")
-        if self.userbot is not None:
-            self._sync_task = asyncio.create_task(self._sync_loop(), name="members-sync")
+        self._compose_membership()
+        # Участников читает юзербот (фильм, старые проекты) и бот (новые): петля нужна при любом.
+        self.bot.add_event_handler(self._on_chat_action, events.ChatAction)
+        self._sync_task = asyncio.create_task(self._sync_loop(), name="members-sync")
+
+    def _compose_membership(self) -> None:
+        """Чат проекта читает тот, кто его собирает; без бота (нет ключей) читать нечем."""
+        if self.bot is None:
+            return
+        userbot: MembershipChecker = (
+            TelethonMembership(self.userbot) if self.userbot is not None else DisabledMembership()
+        )
+        self.membership = RoutedMembership(
+            userbot, TelethonMembership(self.bot), collectors_of_chats
+        )
 
     async def _connect_userbot(self, api_id: int, session: str) -> None:
         """Подключает юзербота. Сбои связи повторяются (на старте сеть бывает не готова),

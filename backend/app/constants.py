@@ -190,6 +190,14 @@ class CompressState(StrEnum):
     FAILED = "failed"  # сжать не получилось: файл остался как был
 
 
+class Collector(StrEnum):
+    """Кто собирает медиа чата проекта. Юзербот читает и историю (так собран фильм), бот видит
+    только то, что прислали после его появления в чате: зато это не личный аккаунт человека."""
+
+    USERBOT = "userbot"
+    BOT = "bot"
+
+
 class FileSource(StrEnum):
     UPLOAD = "upload"
     TELEGRAM = "telegram"

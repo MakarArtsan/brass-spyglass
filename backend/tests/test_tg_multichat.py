@@ -159,12 +159,11 @@ async def test_media_of_another_chat_is_not_reachable_through_this_project(two):
     assert client.get(wrong_project).status_code in (403, 404)
 
 
-async def test_the_pool_starts_one_indexer_per_chat_and_shares_limits(env, monkeypatch):
+async def test_the_pool_starts_one_indexer_per_chat_and_shares_limits(db, monkeypatch):
     async def no_start(self) -> None:  # настоящий индексатор пошёл бы в Telegram
         return None
 
     monkeypatch.setattr(Indexer, "start", no_start)
-    database.init_engine()
     pool = pool_module.IndexerPool(object(), database.session_factory(), get_settings())
     try:
         await pool.start([CHAT, CHAT_B])
