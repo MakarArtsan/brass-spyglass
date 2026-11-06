@@ -92,6 +92,107 @@ test.describe('свой проект', () => {
     expect(posted).toEqual({ title: 'Кривое', title_en: 'Crooked', chat_id: -1001110000001 })
   })
 
+  test.describe('бот-сборщик', () => {
+    const BOT_CHATS = {
+      ready: true,
+      userbot: { username: 'brass_helper', name: 'Помощник' },
+      bot: { username: 'brass_bot' },
+      chats: [
+        { id: -1001110000001, title: 'Мой фильм', via: 'bot', bot_admin: true },
+        { id: -1001110000003, title: 'Без прав', via: 'bot', bot_admin: false },
+        { id: -1001110000002, title: 'Клип', via: 'userbot', bot_admin: null },
+      ],
+      message: null,
+    }
+    const isQuick = (url: URL) => url.pathname === '/api/projects/available-chats' && url.searchParams.get('userbot') === 'false'
+    const isFull = (url: URL) => url.pathname === '/api/projects/available-chats' && url.searchParams.get('userbot') === null
+
+    test('инструкция про бота и /connect, метки «бот» и «помощник», предупреждение про права', async ({ page }) => {
+      await mockSession(page)
+      await page.route(isQuick, (r) => r.fulfill({ json: { ...BOT_CHATS, chats: BOT_CHATS.chats.slice(0, 2) } }))
+      await page.route(isFull, (r) => r.fulfill({ json: BOT_CHATS }))
+      await page.goto(`${BASE_URL}/new-project`)
+      await expect(page.getByRole('heading', { name: '1. Подключите чат' })).toBeVisible()
+      await expect(page.getByRole('heading', { name: 'Через бота сайта (рекомендуется)' })).toBeVisible()
+      await expect(page.getByText('@brass_bot')).toBeVisible()
+      await expect(page.getByText(/отправьте в чате команду \/connect/)).toBeVisible()
+      await expect(page.getByText(/Историю чата он не видит/)).toBeVisible()
+      await expect(page.getByText('@brass_helper')).toBeVisible() // прежний способ остаётся
+      const hero = page.getByRole('radio', { name: /Мой фильм/ })
+      await expect(hero).toContainText('бот')
+      await expect(page.getByRole('radio', { name: /Клип/ })).toContainText('помощник')
+      await expect(page.getByRole('radio', { name: /Без прав/ })).toContainText('Бот не администратор чата')
+      await expect(hero).not.toContainText('Бот не администратор')
+    })
+
+    test('копируются имя бота и команда /connect', async ({ page, context }) => {
+      await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: BASE_URL }).catch(() => undefined)
+      await mockSession(page)
+      await page.route(isQuick, (r) => r.fulfill({ json: BOT_CHATS }))
+      await page.route(isFull, (r) => r.fulfill({ json: BOT_CHATS }))
+      await page.goto(`${BASE_URL}/new-project`)
+      await page.getByRole('button', { name: 'Скопировать /connect' }).click()
+      await expect(page.getByRole('button', { name: 'Скопировано' })).toBeVisible()
+      expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('/connect')
+    })
+
+    test('чаты бота видны сразу, пока ищутся чаты помощника', async ({ page }) => {
+      await mockSession(page)
+      await page.route(isQuick, (r) => r.fulfill({ json: { ...BOT_CHATS, chats: [BOT_CHATS.chats[0]] } }))
+      await page.route(isFull, async (r) => {
+        await new Promise((resolve) => setTimeout(resolve, 1500))
+        await r.fulfill({ json: BOT_CHATS })
+      })
+      await page.goto(`${BASE_URL}/new-project`)
+      await expect(page.getByRole('radio', { name: /Мой фильм/ })).toBeVisible()
+      await expect(page.getByRole('radio', { name: /Клип/ })).toHaveCount(0)
+      await expect(page.getByText('Ищем и чаты помощника…')).toBeVisible()
+      await expect(page.getByRole('radio', { name: /Клип/ })).toBeVisible()
+      await expect(page.getByText('Ищем и чаты помощника…')).toHaveCount(0)
+    })
+
+    test('проект из чата бота создаётся с его chat_id', async ({ page }) => {
+      await mockSession(page)
+      await page.route(isQuick, (r) => r.fulfill({ json: BOT_CHATS }))
+      await page.route(isFull, (r) => r.fulfill({ json: BOT_CHATS }))
+      let posted: Record<string, unknown> | null = null
+      await page.route('**/api/projects', (r) => {
+        if (r.request().method() !== 'POST') return r.fallback()
+        posted = r.request().postDataJSON()
+        return r.fulfill({ status: 201, json: { slug: 'moy-film', title: 'Мой фильм', title_en: 'Мой фильм', role: 'owner', archived: false } })
+      })
+      await page.goto(`${BASE_URL}/new-project`)
+      await page.getByRole('radio', { name: /Мой фильм/ }).click()
+      await page.getByRole('button', { name: 'Создать проект' }).click()
+      await expect(page).toHaveURL(/\/p\/moy-film\/$/)
+      expect(posted).toEqual({ title: 'Мой фильм', chat_id: -1001110000001 })
+    })
+
+    test('чатов нет: подсказка говорит про /connect', async ({ page }) => {
+      await mockSession(page)
+      await page.route(isQuick, (r) => r.fulfill({ json: { ...BOT_CHATS, chats: [] } }))
+      await page.route(isFull, (r) => r.fulfill({ json: { ...BOT_CHATS, chats: [] } }))
+      await page.goto(`${BASE_URL}/new-project`)
+      await expect(page.getByText(/Отправьте \/connect в чате, где бот уже администратор/)).toBeVisible()
+    })
+
+    test('на телефоне ничего не уезжает вбок, цели касания не меньше 44 px', async ({ page }) => {
+      await mockSession(page)
+      await page.route(isQuick, (r) => r.fulfill({ json: BOT_CHATS }))
+      await page.route(isFull, (r) => r.fulfill({ json: BOT_CHATS }))
+      await page.goto(`${BASE_URL}/new-project`)
+      await expect(page.getByRole('radio', { name: /Без прав/ })).toBeVisible()
+      for (const target of [
+        page.getByRole('button', { name: 'Скопировать /connect' }),
+        page.getByRole('button', { name: 'Найти мои чаты' }),
+        page.getByRole('radio', { name: /Без прав/ }),
+      ]) {
+        expect((await target.boundingBox())!.height).toBeGreaterThanOrEqual(43.5)
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0)
+    })
+  })
+
   test('нет подходящих чатов: подсказка, затем «Найти мои чаты» находит новый', async ({ page }) => {
     await mockSession(page)
     let calls = 0

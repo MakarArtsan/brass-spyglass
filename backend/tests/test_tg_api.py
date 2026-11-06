@@ -458,3 +458,28 @@ def test_a_download_does_not_wait_for_a_loop_that_has_stopped(monkeypatch):
         importer._await(never(), timeout=60)
     assert time.monotonic() - started < 5
     stopped.close()
+
+
+async def test_status_says_who_collects_the_chat(tg):
+    from sqlalchemy import select
+
+    client, _ = tg
+    film = client.get("/api/tg/status").json()
+    assert film["collector"] == "userbot" and film["bot_admin"] is None
+    # Тот же проект, но чат собирает бот: «настроено» значит ключи Telegram, а права бота — из /connect.
+    with database.session_factory()() as db:
+        project = db.scalar(select(models.Project))
+        project.collector = "bot"
+        db.add(
+            models.BotChat(
+                chat_id=project.tg_chat_id,
+                title="Чат",
+                connected_by_tg_id=1,
+                bot_admin=False,
+                forum=False,
+            )
+        )
+        db.commit()
+    status = client.get("/api/tg/status").json()
+    assert status["collector"] == "bot" and status["bot_admin"] is False
+    assert status["configured"] is get_settings().telegram_configured

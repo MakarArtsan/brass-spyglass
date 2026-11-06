@@ -115,15 +115,20 @@ export interface ProjectRequest {
   owner_username: string | null
 }
 
-/** Группа Telegram, которой человек может распоряжаться: в ней есть и юзербот, и он (администратор). */
+/** Группа Telegram, которой человек может распоряжаться: он (администратор) подключил её боту командой
+ * /connect или в ней есть аккаунт юзербота. Кто собирает медиа — `via`. */
 export interface AvailableChat {
   id: number
   title: string
+  via?: 'bot' | 'userbot'
+  /** У чатов бота: права ли у него (на момент /connect); без прав файлов из чата он не получит. */
+  bot_admin?: boolean | null
 }
 
 export interface AvailableChats {
   ready: boolean
   userbot: { username: string | null; name: string | null } | null
+  bot?: { username: string | null } | null
   chats: AvailableChat[]
   message: string | null
 }
