@@ -20,6 +20,7 @@ import Dashboard from '@/pages/Dashboard'
 const Animatic = lazy(() => import('@/pages/Animatic'))
 const Assets = lazy(() => import('@/pages/Assets'))
 const Brand = lazy(() => import('@/pages/Brand'))
+const Collages = lazy(() => import('@/pages/Collages'))
 const Export = lazy(() => import('@/pages/Export'))
 const ImportScenario = lazy(() => import('@/pages/ImportScenario'))
 const Journal = lazy(() => import('@/pages/Journal'))
@@ -41,6 +42,7 @@ const IMPLEMENTED: Record<string, JSX.Element> = {
   '/export': <Export />,
   '/import': <ImportScenario />,
   '/media': <Media />,
+  '/collages': <Collages />,
   '/telegram': <Telegram />,
   '/assets': <Assets />,
   '/setups': <Setups />,

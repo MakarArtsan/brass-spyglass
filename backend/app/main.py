@@ -17,6 +17,7 @@ from app import approvals, backup, events, models, uploads
 from app import db as database
 from app.api import access, animatic, dashboard, entities, health, me
 from app.api import auth as auth_api
+from app.api import collages as collages_api
 from app.api import events as events_api
 from app.api import exports as exports_api
 from app.api import files as files_api
@@ -181,6 +182,7 @@ def create_app() -> FastAPI:
         dashboard.router,
         animatic.router,
         exports_api.router,
+        collages_api.router,
         scenario_import_api.router,
         notifications_api.router,
         telegram_api.router,

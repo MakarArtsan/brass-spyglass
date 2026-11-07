@@ -23,7 +23,7 @@ test.describe('раскладки', () => {
     )
     await page.goto('/')
     const nav = page.getByRole('navigation', { name: 'The Brass Spyglass' }).first()
-    await expect(nav.getByRole('link')).toHaveCount(15)
+    await expect(nav.getByRole('link')).toHaveCount(16)
     await expect(page.getByRole('button', { name: 'Ещё' })).toBeHidden()
     expect(await noHorizontalScroll(page)).toBe(true)
   })
