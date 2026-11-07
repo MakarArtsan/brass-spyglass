@@ -80,6 +80,7 @@ class Batch {
     }
     if (dirty.has('notify')) void qc.invalidateQueries({ queryKey: ['notifications'] })
     if (dirty.has('export')) void qc.invalidateQueries({ queryKey: ['exports'] })
+    if (dirty.has('collage')) void qc.invalidateQueries({ queryKey: ['collages'] })
     if (dirty.has('comment')) void qc.invalidateQueries({ queryKey: ['comments'] })
     if (dirty.has('tg')) void qc.invalidateQueries({ queryKey: ['tg'] })
     if (dirty.has('project')) void qc.invalidateQueries({ queryKey: ['project'] })

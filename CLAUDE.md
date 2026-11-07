@@ -63,6 +63,7 @@ backend/app/
   events.py                 шина событий SSE: события копятся в сессии и уходят после коммита
   storage.py                занятое место на /data, лимит проекта (`ensure_room` — отказ при нехватке)
   linkpreview.py            карточка ссылки (Open Graph) с защитой от SSRF
+  collage.py                коллаж из 2–10 фото: раскладка рядами без обрезки и сборка JPEG 3840 px (чистые функции, с тестами)
   tg/                       Telegram: types (Gateway), telethon_gateway (ЕДИНСТВЕННОЕ место с типами
                             Telethon), parse, limiter (1 запрос/с, FloodWait), indexer, pool (пара на чат проекта),
                             runtime (шлюзы/индексаторы по чатам), importer, previews
@@ -77,6 +78,7 @@ backend/app/
     scenario_import.py      импорт сценария: проверка, создание одной транзакцией в пустой проект, `import_run`
     ordering.py, links.py   порядок сцен/шотов; привязки шот↔ассет и файл↔карточка
     bot_chats.py            чаты, подключённые боту командой /connect (откуда берётся чат нового проекта)
+    collages.py             коллажи: сборка из загруженных фото (картинка — обычный файл проекта), список, удаление
     files.py, jobs.py       файлы (дубли по sha256, метаданные, ссылки) и очередь фоновых задач
     telegram.py             индекс чата и импорт выбранного в карточки (вся запись в БД по Telegram)
     versions.py, finals.py  версии файлов (v1, v2…, откат) и финальный файл сцены/шота
@@ -91,7 +93,7 @@ backend/app/
   api/access.py             `project_access`: slug из адреса → членство и роль → проект сессии; чужое и нет такого — 404
   api/                      роутеры FastAPI: entities, files (загрузка, версии, медиатека, ссылки), dashboard,
                             events (SSE), telegram (окно «Добавить из Telegram»), animatic, exports,
-                            notifications, scenario_import (промпт, проверка, создание), serialize
+                            notifications, scenario_import (промпт, проверка, создание), collages, serialize
   main.py                   lifespan: миграции → проект → сид → Telegram → воркер; раздача React
 backend/seed/               Krivoe_zerkalo_tracker.xlsx — стартовые данные
 backend/scripts/            import_xlsx.py, dev_session.py, make_session.py

@@ -585,6 +585,35 @@ class ImportRun(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
+class Collage(Base):
+    """Коллаж: несколько фото, собранных в одну картинку, и название, которое дал загрузивший.
+    Картинка — обычный файл проекта (`file`), фото — тоже файлы; оригиналы коллаж не меняет."""
+
+    __tablename__ = "collage"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("project.id"), index=True)
+    title: Mapped[str] = mapped_column(String(200))
+    file_id: Mapped[int] = mapped_column(ForeignKey("file.id"))  # собранная картинка
+    width: Mapped[int] = mapped_column(Integer)
+    height: Mapped[int] = mapped_column(Integer)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("user.id"), default=None)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(UTCDateTime, default=None)
+
+
+class CollagePhoto(Base):
+    """Какие фото и в каком порядке вошли в коллаж."""
+
+    __tablename__ = "collage_photo"
+    __table_args__ = (UniqueConstraint("collage_id", "position"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    collage_id: Mapped[int] = mapped_column(ForeignKey("collage.id"), index=True)
+    file_id: Mapped[int] = mapped_column(ForeignKey("file.id"))
+    position: Mapped[int] = mapped_column(Integer)
+
+
 class BotChat(Base):
     """Чат, подключённый боту командой `/connect`: человек добавил бота в закрытый чат команды,
     а бот проверил, что команду прислал администратор. К проекту не относится (его может ещё
