@@ -12,6 +12,7 @@ import re
 import tempfile
 from pathlib import Path
 
+from sqlalchemy import delete as sql_delete
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -69,32 +70,34 @@ def _photos(db: Session, settings: Settings, file_ids: list[int]) -> list[models
     return ordered
 
 
-def create(
-    db: Session,
-    actor: Actor,
-    project: models.Project,
-    *,
-    title: str,
-    file_ids: list[int],
-    settings: Settings,
-) -> models.Collage:
-    """Собирает коллаж. Гостю и неподтверждённому проекту нельзя: коллаж — новый файл."""
-    permissions.require(permissions.can_create(actor, ENTITY), "Гость не создаёт коллажи")
-    permissions.require_upload(actor, "Гость не создаёт коллажи")
+def clean_title(title: str) -> str:
     title = " ".join(title.split())
     if not title:
         raise ValidationError("Назовите коллаж")
     if len(title) > MAX_TITLE:
         raise ValidationError(f"Название длиннее {MAX_TITLE} знаков")
+    return title
+
+
+def _check_ids(file_ids: list[int]) -> None:
     if not engine.MIN_PHOTOS <= len(file_ids) <= engine.MAX_PHOTOS:
         raise ValidationError(
             f"В коллаже должно быть от {engine.MIN_PHOTOS} до {engine.MAX_PHOTOS} фото"
         )
     if len(set(file_ids)) != len(file_ids):
         raise ValidationError("Одно и то же фото выбрано дважды")
-    photos = _photos(db, settings, file_ids)
-    storage.ensure_room(settings, db, project.id, project.storage_limit_gb, RESERVE_BYTES)
 
+
+def _build_image(
+    db: Session,
+    actor: Actor,
+    project: models.Project,
+    photos: list[models.File],
+    title: str,
+    settings: Settings,
+) -> tuple[models.File, engine.Layout]:
+    """Собирает картинку коллажа и кладёт её файлом проекта (или берёт уже собранную такую же)."""
+    storage.ensure_room(settings, db, project.id, project.storage_limit_gb, RESERVE_BYTES)
     tmp_dir = settings.cache_dir / "tmp"
     tmp_dir.mkdir(parents=True, exist_ok=True)
     handle, tmp_name = tempfile.mkstemp(suffix=".jpg", dir=tmp_dir)
@@ -128,6 +131,33 @@ def create(
             )
     finally:
         tmp.unlink(missing_ok=True)  # после store_upload файл уже переехал, остаток не мешает
+    return image, layout
+
+
+def _put_photos(db: Session, collage_id: int, photos: list[models.File]) -> None:
+    db.add_all(
+        models.CollagePhoto(collage_id=collage_id, file_id=p.id, position=i)
+        for i, p in enumerate(photos)
+    )
+    db.flush()
+
+
+def create(
+    db: Session,
+    actor: Actor,
+    project: models.Project,
+    *,
+    title: str,
+    file_ids: list[int],
+    settings: Settings,
+) -> models.Collage:
+    """Собирает коллаж. Гостю и неподтверждённому проекту нельзя: коллаж — новый файл."""
+    permissions.require(permissions.can_create(actor, ENTITY), "Гость не создаёт коллажи")
+    permissions.require_upload(actor, "Гость не создаёт коллажи")
+    title = clean_title(title)
+    _check_ids(file_ids)
+    photos = _photos(db, settings, file_ids)
+    image, layout = _build_image(db, actor, project, photos, title, settings)
 
     row = models.Collage(
         project_id=project.id,
@@ -139,14 +169,102 @@ def create(
     )
     db.add(row)
     db.flush()
-    db.add_all(
-        models.CollagePhoto(collage_id=row.id, file_id=p.id, position=i)
-        for i, p in enumerate(photos)
-    )
-    db.flush()
+    _put_photos(db, row.id, photos)
     log_activity(
         db, actor.id, "create", ENTITY, row.id, {"title": title, "photos": len(photos)}, project.id
     )
+    return row
+
+
+def photo_ids(db: Session, collage: models.Collage) -> list[int]:
+    """Какие фото в коллаже по порядку раскладки (как записано, даже если файл потом удалили)."""
+    return list(
+        db.scalars(
+            select(models.CollagePhoto.file_id)
+            .where(models.CollagePhoto.collage_id == collage.id)
+            .order_by(models.CollagePhoto.position)
+        )
+    )
+
+
+def _release_image(db: Session, collage: models.Collage, image_id: int) -> None:
+    """Картинку, которой больше не пользуется ни один коллаж, убираем из проекта (в удалённые):
+    иначе каждая правка оставляла бы в медиатеке и на диске устаревшую копию."""
+    shared = db.scalar(
+        select(func.count())
+        .select_from(models.Collage)
+        .where(
+            models.Collage.file_id == image_id,
+            models.Collage.id != collage.id,
+            models.Collage.deleted_at.is_(None),
+        )
+    )
+    image = db.scalar(select(models.File).where(models.File.id == image_id))
+    if not shared and image is not None and image.deleted_at is None:
+        image.deleted_at = utcnow()
+
+
+def update(
+    db: Session,
+    actor: Actor,
+    project: models.Project,
+    collage_id: int,
+    *,
+    title: str | None = None,
+    file_ids: list[int] | None = None,
+    settings: Settings,
+) -> models.Collage:
+    """Правит готовый коллаж: название и/или состав и порядок фото. Другое название картинку не
+    трогает; другой состав или порядок собирают её заново (старая картинка, если она больше никому
+    не нужна, уходит в удалённые). Менять может автор, режиссёр и владелец. Пересборка — это новый
+    файл, поэтому закрыта гостю и неподтверждённому проекту, а переименование — нет."""
+    row = get(db, collage_id)
+    permissions.require(
+        permissions.can_edit(actor, ENTITY, row.created_by, {"title", "photos"}),
+        "Чужой коллаж менять нельзя",
+    )
+    if title is None and file_ids is None:
+        raise ValidationError("Нечего менять: укажите название или фото")
+    old_title = row.title
+    new_title = clean_title(title) if title is not None else old_title
+    current = photo_ids(db, row)
+    reorder = file_ids is not None and file_ids != current
+    diff: dict[str, object] = {}
+
+    if reorder:
+        assert file_ids is not None
+        permissions.require_upload(actor, "Гость не собирает коллажи")
+        _check_ids(file_ids)
+        photos = _photos(db, settings, file_ids)
+        image, layout = _build_image(db, actor, project, photos, new_title, settings)
+        old_image = row.file_id
+        row.file_id, row.width, row.height = image.id, layout.width, layout.height
+        db.execute(sql_delete(models.CollagePhoto).where(models.CollagePhoto.collage_id == row.id))
+        db.flush()
+        _put_photos(db, row.id, photos)
+        if old_image != image.id:
+            _release_image(db, row, old_image)
+        diff["photos"] = {"было": len(current), "стало": len(photos)}
+    if new_title != old_title:
+        row.title = new_title
+        diff["title"] = {"было": old_title, "стало": new_title}
+        if not reorder:
+            # Имя файла картинки следует за названием, пока файл только этого коллажа.
+            image = db.scalar(select(models.File).where(models.File.id == row.file_id))
+            others = db.scalar(
+                select(func.count())
+                .select_from(models.Collage)
+                .where(
+                    models.Collage.file_id == row.file_id,
+                    models.Collage.id != row.id,
+                    models.Collage.deleted_at.is_(None),
+                )
+            )
+            if image is not None and not others and image.original_name == file_name(old_title):
+                image.original_name = file_name(new_title)
+    if diff:
+        db.flush()
+        log_activity(db, actor.id, "update", ENTITY, row.id, diff, project.id)
     return row
 
 

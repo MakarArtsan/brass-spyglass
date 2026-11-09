@@ -98,6 +98,35 @@ def create_collage(body: CollageIn, request: Request, db: DbDep, actor: ActorDep
     return _items(db, [row])[0]
 
 
+class CollageEdit(BaseModel):
+    """Что поменять: название и/или полный новый состав фото в нужном порядке."""
+
+    model_config = ConfigDict(extra="forbid")
+    title: Annotated[str, Field(min_length=1, max_length=400)] | None = None
+    file_ids: Annotated[list[int], Field(min_length=1, max_length=50)] | None = None
+
+
+@router.patch("/{collage_id}")
+def edit_collage(
+    collage_id: int, body: CollageEdit, request: Request, db: DbDep, actor: ActorDep
+) -> dict[str, Any]:
+    """Переименовывает коллаж и/или меняет состав и порядок фото (картинка собирается заново)."""
+    try:
+        row = collages.update(
+            db,
+            actor,
+            projects.current(db),
+            collage_id,
+            title=body.title,
+            file_ids=body.file_ids,
+            settings=get_settings(),
+        )
+    except storage.NoRoom as exc:
+        raise HTTPException(status.HTTP_507_INSUFFICIENT_STORAGE, str(exc)) from exc
+    request.app.state.jobs.wake()  # превью новой картинки
+    return {**_items(db, [row])[0], "photo_list": [_photo(f) for f in collages.photos_of(db, row)]}
+
+
 @router.get("/{collage_id}")
 def get_collage(collage_id: int, db: DbDep, _: UserDep) -> dict[str, Any]:
     row = collages.get(db, collage_id)

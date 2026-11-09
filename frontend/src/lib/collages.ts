@@ -69,3 +69,15 @@ export function useDeleteCollage() {
     },
   })
 }
+
+export function useUpdateCollage() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: number; title?: string; file_ids?: number[] }) =>
+      api<CollageDetail>(`/collages/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+    onSuccess: () => {
+      // Другой состав — это новая картинка (файл проекта) и запись в журнале; другое название меняет и список.
+      for (const key of ['collages', 'files', 'library', 'activity']) void qc.invalidateQueries({ queryKey: [key] })
+    },
+  })
+}

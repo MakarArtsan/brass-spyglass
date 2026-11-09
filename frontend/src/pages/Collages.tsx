@@ -1,4 +1,4 @@
-import { Download, FileArchive, Trash2 } from 'lucide-react'
+import { Download, FileArchive, Pencil, Trash2 } from 'lucide-react'
 import { lazy, Suspense, useState } from 'react'
 import { Avatar } from '@/components/Avatar'
 import { CollageForm } from '@/components/collages/CollageForm'
@@ -13,8 +13,9 @@ import { cn } from '@/lib/utils'
 import { ru } from '@/ru'
 
 const CollageDialog = lazy(() => import('@/components/collages/CollageDialog'))
+const CollageEditDialog = lazy(() => import('@/components/collages/CollageEditDialog'))
 
-function Card({ collage, canDelete, onOpen }: { collage: Collage; canDelete: boolean; onOpen: () => void }) {
+function Card({ collage, canEdit, canDelete, onOpen, onEdit }: { collage: Collage; canEdit: boolean; canDelete: boolean; onOpen: () => void; onEdit: () => void }) {
   const remove = useDeleteCollage()
   const [asking, setAsking] = useState(false)
   return (
@@ -50,8 +51,24 @@ function Card({ collage, canDelete, onOpen }: { collage: Collage; canDelete: boo
             {ru.collages.downloadPhotos}
           </a>
         </div>
+        {(canEdit || canDelete) && !asking && (
+          <div className="flex flex-wrap gap-2">
+            {canEdit && (
+              <Button type="button" variant="outline" onClick={onEdit} aria-label={ru.collages.editOpen(collage.title)}>
+                <Pencil size={16} aria-hidden />
+                {ru.collages.edit}
+              </Button>
+            )}
+            {canDelete && (
+              <Button type="button" variant="outline" onClick={() => setAsking(true)} aria-label={ru.collages.delete(collage.title)}>
+                <Trash2 size={16} aria-hidden />
+                {ru.collages.deleteLabel}
+              </Button>
+            )}
+          </div>
+        )}
         {canDelete &&
-          (asking ? (
+          asking && (
             <div className="flex flex-wrap items-center gap-2" role="group" aria-label={ru.collages.deleteAsk(collage.title)}>
               <span className="text-sm">{ru.collages.deleteQuestion}</span>
               <Button
@@ -71,12 +88,7 @@ function Card({ collage, canDelete, onOpen }: { collage: Collage; canDelete: boo
                 {ru.collages.deleteNo}
               </Button>
             </div>
-          ) : (
-            <Button type="button" variant="ghost" onClick={() => setAsking(true)} aria-label={ru.collages.delete(collage.title)} className="self-start">
-              <Trash2 size={16} aria-hidden />
-              {ru.collages.deleteLabel}
-            </Button>
-          ))}
+          )}
       </div>
     </li>
   )
@@ -88,6 +100,7 @@ export default function Collages() {
   const perms = usePerms()
   const { data, isPending, isError, refetch } = useCollages()
   const [open, setOpen] = useState<Collage | null>(null)
+  const [editing, setEditing] = useState<Collage | null>(null)
 
   return (
     <section className="space-y-6">
@@ -113,8 +126,10 @@ export default function Collages() {
             <Card
               key={collage.id}
               collage={collage}
+              canEdit={perms.canEdit({ created_by: collage.created_by?.id ?? null })}
               canDelete={perms.canDelete({ created_by: collage.created_by?.id ?? null })}
               onOpen={() => setOpen(collage)}
+              onEdit={() => setEditing(collage)}
             />
           ))}
         </ul>
@@ -123,6 +138,15 @@ export default function Collages() {
       {open && (
         <Suspense fallback={null}>
           <CollageDialog collage={open} onClose={() => setOpen(null)} />
+        </Suspense>
+      )}
+      {editing && (
+        <Suspense fallback={null}>
+          <CollageEditDialog
+            collage={editing}
+            canDelete={perms.canDelete({ created_by: editing.created_by?.id ?? null })}
+            onClose={() => setEditing(null)}
+          />
         </Suspense>
       )}
     </section>

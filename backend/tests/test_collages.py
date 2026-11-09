@@ -352,3 +352,312 @@ def test_the_journal_records_who_made_and_who_deleted_a_collage(api):
     )
     assert {e["action"] for e in entries} == {"create", "delete"}
     assert all("В журнале" in (e.get("entity_label") or e.get("label") or "") for e in entries)
+
+
+# --- правка готового коллажа ---------------------------------------------------------------------------------------
+
+
+def edit(client, collage_id, **body):
+    return client.patch(f"/api/collages/{collage_id}", json=body)
+
+
+def state(collage_id: int) -> dict:
+    """Что записано в базе: название, картинка, фото по порядку, число файлов проекта."""
+    with database.session_factory()() as db:
+        row = db.get(models.Collage, collage_id)
+        image = db.get(models.File, row.file_id)
+        photos = list(
+            db.scalars(
+                select(models.CollagePhoto.file_id)
+                .where(models.CollagePhoto.collage_id == collage_id)
+                .order_by(models.CollagePhoto.position)
+            )
+        )
+        return {
+            "title": row.title,
+            "file_id": row.file_id,
+            "image_name": image.original_name,
+            "image_deleted": image.deleted_at is not None,
+            "photos": photos,
+            "files": db.scalar(select(func.count()).select_from(models.File)),
+        }
+
+
+def test_renaming_changes_the_title_but_not_the_picture_and_nothing_is_rebuilt(api):
+    ids = three(api)
+    item = make(api, "Старое имя", ids).json()
+    before = state(item["id"])
+    done = edit(api, item["id"], title="  Одежда   северян ")
+    assert done.status_code == 200, done.text
+    assert done.json()["title"] == "Одежда северян"
+    after = state(item["id"])
+    assert (
+        after["file_id"] == before["file_id"] and after["files"] == before["files"]
+    )  # картинку не собирали
+    assert after["photos"] == before["photos"] and after["image_name"] == "Одежда северян.jpg"
+    assert [c["title"] for c in api.get("/api/collages").json()] == ["Одежда северян"]
+    disposition = api.get(item["download_url"]).headers["content-disposition"]
+    assert quote("Одежда северян.jpg", safe="") in disposition
+
+
+def test_the_picture_file_keeps_its_name_when_another_collage_shares_it(api):
+    ids = three(api)
+    one = make(api, "Общая картинка", ids).json()
+    two = make(api, "Тот же набор", ids).json()  # та же картинка у двух коллажей
+    edit(api, one["id"], title="Переименован")
+    assert state(one["id"])["image_name"] == "Общая картинка.jpg"
+    assert state(two["id"])["title"] == "Тот же набор"
+
+
+def test_a_bad_title_is_refused_and_nothing_changes(api):
+    item = make(api, "Как было", three(api)).json()
+    for title in ("   ", "я" * (collages.MAX_TITLE + 1)):
+        assert edit(api, item["id"], title=title).status_code == 422
+    assert state(item["id"])["title"] == "Как было"
+
+
+def test_changing_the_order_rebuilds_the_picture_and_the_zip_follows_the_new_order(api):
+    ids = three(api)
+    item = make(api, "Порядок", ids).json()
+    before = state(item["id"])
+    done = edit(api, item["id"], file_ids=[ids[2], ids[1], ids[0]])
+    assert done.status_code == 200, done.text
+    after = state(item["id"])
+    assert after["photos"] == [ids[2], ids[1], ids[0]] and after["file_id"] != before["file_id"]
+    assert after["image_deleted"] is False
+    with (
+        database.session_factory()() as db
+    ):  # прежняя картинка больше никому не нужна: ушла в удалённые
+        assert db.get(models.File, before["file_id"]).deleted_at is not None
+    names = [p["original_name"] for p in done.json()["photo_list"]]
+    assert names == ["север-3.jpg", "север-2.jpg", "север-1.jpg"]
+    with zipfile.ZipFile(io.BytesIO(api.get(item["zip_url"]).content)) as zf:
+        assert zf.namelist() == [f"{n:02d}_{name}" for n, name in enumerate(names, 1)]
+    with Image.open(io.BytesIO(api.get(item["download_url"]).content)) as out:
+        assert out.size == (done.json()["width"], done.json()["height"])
+
+
+def test_photos_can_be_removed_and_added_in_a_finished_collage(api):
+    ids = three(api)
+    item = make(api, "Состав", ids).json()
+    fewer = edit(api, item["id"], file_ids=[ids[0], ids[2]])
+    assert fewer.status_code == 200 and fewer.json()["photos"] == 2
+    extra = photo(api, "новое.jpg", (900, 900), (200, 200, 30))
+    more = edit(api, item["id"], file_ids=[extra, ids[0], ids[2]])
+    assert more.status_code == 200 and more.json()["photos"] == 3
+    assert state(item["id"])["photos"] == [extra, ids[0], ids[2]]
+    assert all(
+        api.get(f"/api/files/{i}").status_code == 200 for i in ids
+    )  # убранное осталось файлом проекта
+
+
+def test_the_same_list_is_not_rebuilt(api):
+    ids = three(api)
+    item = make(api, "Без изменений", ids).json()
+    before = state(item["id"])
+    assert edit(api, item["id"], file_ids=ids).status_code == 200
+    assert state(item["id"]) == before
+
+
+def test_title_and_photos_can_change_together_and_the_new_picture_gets_the_new_name(api):
+    ids = three(api)
+    item = make(api, "Было", ids).json()
+    done = edit(api, item["id"], title="Стало", file_ids=ids[:2])
+    assert done.status_code == 200
+    after = state(item["id"])
+    assert (after["title"], after["image_name"], len(after["photos"])) == ("Стало", "Стало.jpg", 2)
+
+
+def test_a_picture_that_another_collage_still_uses_is_kept(api):
+    ids = three(api)
+    one = make(api, "Первый", ids).json()
+    two = make(api, "Второй", ids).json()  # общая картинка
+    shared = state(one["id"])["file_id"]
+    edit(api, one["id"], file_ids=ids[:2])
+    assert state(two["id"])["file_id"] == shared and state(two["id"])["image_deleted"] is False
+    assert api.get(two["download_url"]).status_code == 200
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda ids, extra: ids[:1],  # одно фото
+        lambda ids, extra: [ids[0], ids[0]],  # дважды
+        lambda ids, extra: [ids[0], 999_999],  # нет такого
+        lambda ids, extra: [ids[0], extra["text"]],  # не картинка
+        lambda ids, extra: [ids[0], extra["bad"]],  # битая
+    ],
+    ids=["одно", "дважды", "нет", "не-картинка", "битая"],
+)
+def test_a_wrong_new_set_is_refused_and_the_collage_is_untouched(api, mutate):
+    ids = three(api)
+    extra = {
+        "text": upload(api, b"just text", "note.txt", no_compress=True).json()["file"]["id"],
+        "bad": upload(api, "не картинка".encode(), "bad.jpg", no_compress=True).json()["file"][
+            "id"
+        ],
+    }
+    item = make(api, "Целый", ids).json()
+    before = state(item["id"])
+    assert edit(api, item["id"], file_ids=mutate(ids, extra)).status_code == 422
+    assert state(item["id"]) == before
+
+
+def test_eleven_photos_are_too_many_when_editing_too(api):
+    ids = three(api)
+    item = make(api, "Мало", ids).json()
+    many = [photo(api, f"q{i}.jpg", (800, 600), (15 * i, 90, 200)) for i in range(11)]
+    refused = edit(api, item["id"], file_ids=many)
+    assert refused.status_code == 422 and "от 2 до 10" in refused.json()["detail"]
+    assert len(state(item["id"])["photos"]) == 3
+
+
+def test_a_deleted_photo_cannot_be_put_into_a_new_arrangement(api):
+    ids = three(api)
+    item = make(api, "Фото ушло", ids).json()
+    api.delete(f"/api/files/{ids[1]}")
+    refused = edit(
+        api, item["id"], file_ids=[ids[2], ids[1], ids[0]]
+    )  # другой порядок, удалённое фото в нём
+    assert refused.status_code == 422 and "нет в проекте" in refused.json()["detail"]
+    assert edit(api, item["id"], file_ids=[ids[0], ids[2]]).status_code == 200  # а без него можно
+    assert (
+        edit(api, item["id"], title="Переименовано").status_code == 200
+    )  # и название меняется свободно
+
+
+def test_an_empty_or_unknown_request_is_refused(api):
+    item = make(api, "Пусто", three(api)).json()
+    assert edit(api, item["id"]).status_code == 422
+    assert "Нечего менять" in edit(api, item["id"]).json()["detail"]
+    assert edit(api, item["id"], color="red").status_code == 422
+    assert edit(api, item["id"], file_ids=[]).status_code == 422
+
+
+def test_the_team_edits_its_own_collage_only_and_director_and_owner_edit_any(api):
+    ids = three(api)
+    login(api, "team", "Петя")
+    mine = make(api, "Моё", ids).json()
+    assert edit(api, mine["id"], title="Моё, исправлено").status_code == 200
+    login(api, "owner", "Артём")
+    theirs = make(api, "Чужое", ids[:2]).json()
+    login(api, "team", "Лена")
+    assert edit(api, theirs["id"], title="Захват").status_code == 403
+    assert edit(api, theirs["id"], file_ids=ids).status_code == 403
+    assert state(theirs["id"])["title"] == "Чужое"
+    login(api, "director", "Дина")
+    assert edit(api, mine["id"], title="Режиссёр").status_code == 200
+    login(api, "owner", "Артём")
+    assert edit(api, mine["id"], file_ids=ids[:2]).status_code == 200
+
+
+def test_a_guest_cannot_edit(api):
+    item = make(api, "Не гостю", three(api)).json()
+    login(api, "guest", "Гость")
+    assert edit(api, item["id"], title="Гость").status_code == 403
+
+
+def test_in_a_waiting_project_the_title_can_change_but_the_photos_cannot(api):
+    ids = three(api)
+    item = make(api, "Ждёт", ids).json()
+    with database.session_factory()() as db:
+        db.scalar(select(models.Project)).approved_at = None
+        db.commit()
+    assert edit(api, item["id"], title="Ждёт подтверждения").status_code == 200
+    refused = edit(api, item["id"], file_ids=ids[:2])
+    assert refused.status_code == 403 and "не подтверждён" in refused.json()["detail"]
+    assert len(state(item["id"])["photos"]) == 3
+
+
+def test_when_the_disk_is_full_the_photos_stay_but_the_title_can_still_change(api, monkeypatch):
+    ids = three(api)
+    item = make(api, "Тесно", ids).json()
+    before = state(item["id"])
+
+    def full(*_args, **_kwargs):
+        raise storage.NoRoom("На диске не хватает места")
+
+    monkeypatch.setattr(storage, "ensure_room", full)
+    refused = edit(api, item["id"], file_ids=ids[:2])
+    assert refused.status_code == 507 and state(item["id"]) == before
+    assert edit(api, item["id"], title="Всё ещё можно").status_code == 200
+
+
+def test_a_deleted_collage_cannot_be_edited(api):
+    item = make(api, "Был", three(api)).json()
+    api.delete(f"/api/collages/{item['id']}")
+    assert edit(api, item["id"], title="Воскрес").status_code == 404
+
+
+def test_another_project_cannot_edit_a_collage(api):
+    ids = three(api)
+    item = make(api, "Своё", ids).json()
+    with database.session_factory()() as db:
+        db.add(
+            models.Project(
+                **{
+                    **projects.DEFAULT_PROJECT,
+                    "slug": "second",
+                    "title": "Второй",
+                    "approved_at": datetime.now(UTC),
+                }
+            )
+        )
+        db.commit()
+    act_as(api, person("Режиссёр", {"second": Role.DIRECTOR}))
+    assert (
+        api.patch(f"/api/p/second/collages/{item['id']}", json={"title": "Чужой"}).status_code
+        == 404
+    )
+    assert state(item["id"])["title"] == "Своё"
+
+
+def test_the_journal_records_what_was_changed(api):
+    ids = three(api)
+    item = make(api, "Для журнала", ids).json()
+    edit(api, item["id"], title="Новое имя", file_ids=ids[:2])
+    with database.session_factory()() as db:
+        entry = db.scalar(
+            select(models.Activity).where(
+                models.Activity.entity_type == "collage", models.Activity.action == "update"
+            )
+        )
+        assert entry.entity_id == item["id"]
+        assert entry.diff["title"] == {"было": "Для журнала", "стало": "Новое имя"}
+        assert entry.diff["photos"] == {"было": 3, "стало": 2}
+
+
+@pytest.fixture
+def renders(monkeypatch):
+    """Сколько раз сервер собирал картинку: лишней сборки быть не должно."""
+    calls: list[int] = []
+    real = engine.render
+
+    def counting(photos, dest, **kwargs):
+        calls.append(len(photos))
+        return real(photos, dest, **kwargs)
+
+    monkeypatch.setattr(collages.engine, "render", counting)
+    return calls
+
+
+def test_the_picture_is_built_only_when_the_photos_really_change(api, renders):
+    ids = three(api)
+    item = make(api, "Считаем", ids).json()
+    assert renders == [3]
+    edit(api, item["id"], title="Другое имя")
+    edit(api, item["id"], file_ids=ids)  # тот же список
+    edit(api, item["id"], title="И ещё имя", file_ids=ids)
+    assert renders == [3]  # переименование и тот же набор картинку не пересобирают
+    edit(api, item["id"], file_ids=[ids[1], ids[0], ids[2]])
+    assert renders == [3, 3]
+
+
+def test_a_waiting_project_is_refused_before_any_picture_is_built(api, renders):
+    ids = three(api)
+    item = make(api, "Ждёт", ids).json()
+    with database.session_factory()() as db:
+        db.scalar(select(models.Project)).approved_at = None
+        db.commit()
+    assert edit(api, item["id"], file_ids=ids[:2]).status_code == 403
+    assert renders == [3]  # только первая сборка, при создании
