@@ -215,6 +215,146 @@ test.describe('коллажи', () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0)
   })
 
+  test.describe('правка готового коллажа', () => {
+    const open = async (page: Page, title: string) => {
+      await page.goto('/collages')
+      await page.getByRole('button', { name: `Изменить коллаж «${title}»` }).click()
+      return page.getByRole('dialog', { name: `Изменить коллаж «${title}»` })
+    }
+    const detail = (page: Page, id: number) => api<{ photo_list: { original_name: string }[] }>(page, 'GET', `/collages/${id}`)
+
+    test('название меняется без пересборки картинки', async ({ page }) => {
+      const title = unique('Старое имя')
+      const made = await viaApi(page, title, ['r-1', 'r-2'])
+      const dialog = await open(page, title)
+      const save = dialog.getByRole('button', { name: 'Сохранить' })
+      await expect(dialog.getByText('Ничего не изменено')).toBeVisible()
+      await expect(save).toBeDisabled()
+      const fresh = unique('Новое имя')
+      await dialog.getByLabel('Название коллажа').fill(fresh)
+      await expect(save).toBeEnabled()
+      await save.click()
+      await expect(dialog).toBeHidden()
+      await expect(page.getByRole('listitem').filter({ hasText: fresh }).first()).toBeVisible()
+      await expect(page.getByRole('listitem').filter({ hasText: title })).toHaveCount(0)
+      const after = (await api<{ id: number; title: string; urls: { original: string } }[]>(page, 'GET', '/collages')).find((c) => c.id === made.id)!
+      expect(after.title).toBe(fresh)
+      const before = (await api<{ id: number; urls: { original: string } }[]>(page, 'GET', '/collages')).find((c) => c.id === made.id)!
+      expect(after.urls.original.split('?')[0]).toBe(before.urls.original.split('?')[0])
+    })
+
+    test('состав и порядок: сдвинуть, убрать, добавить новое фото — картинка собирается заново', async ({ page }) => {
+      const title = unique('Состав')
+      const tag = randomBytes(2).toString('hex')
+      const made = await viaApi(page, title, [`a${tag}`, `b${tag}`, `c${tag}`])
+      const dialog = await open(page, title)
+      const grid = dialog.getByRole('list', { name: 'Выбранные фото' })
+      await expect(grid.getByRole('listitem')).toHaveCount(3)
+      await expect(grid.getByText(/в проекте/).first()).toBeVisible()
+      await dialog.getByRole('button', { name: `Сдвинуть «c${tag}.jpg» раньше` }).click()
+      await dialog.getByRole('button', { name: `Убрать «a${tag}.jpg»` }).click()
+      await dialog.locator('input[type=file]').setInputFiles([photo(`d${tag}`)])
+      await expect(grid.getByRole('listitem')).toHaveCount(3)
+      await expect(dialog.getByText('Выбрано 3 из 10')).toBeVisible()
+      await dialog.getByRole('button', { name: 'Сохранить' }).click()
+      await expect(dialog).toBeHidden({ timeout: 60_000 })
+      const after = await detail(page, made.id)
+      expect(after.photo_list.map((p) => p.original_name)).toEqual([`c${tag}.jpg`, `b${tag}.jpg`, `d${tag}.jpg`])
+      const image = await bytes(page, made.download_url)
+      expect(image.res.status()).toBe(200)
+      expect(image.body.subarray(0, 3).toString('hex')).toBe('ffd8ff')
+    })
+
+    test('меньше двух фото сохранить нельзя; «Отмена» ничего не меняет', async ({ page }) => {
+      const title = unique('Мало')
+      await viaApi(page, title, ['m-1', 'm-2'])
+      const dialog = await open(page, title)
+      await dialog.getByRole('button', { name: /^Убрать/ }).first().click()
+      await expect(dialog.getByText('Нужно хотя бы 2 фото')).toBeVisible()
+      await expect(dialog.getByRole('button', { name: 'Сохранить' })).toBeDisabled()
+      await dialog.getByRole('button', { name: 'Отмена' }).click()
+      await expect(dialog).toBeHidden()
+      const again = await open(page, title)
+      await expect(again.getByRole('list', { name: 'Выбранные фото' }).getByRole('listitem')).toHaveCount(2)
+    })
+
+    test('ошибка сервера показана в окне, правка не теряется и сохраняется со второго раза', async ({ page }) => {
+      const title = unique('Ошибка')
+      await viaApi(page, title, ['e-1', 'e-2'])
+      let first = true
+      await page.route('**/collages/*', (route) => {
+        if (route.request().method() === 'PATCH' && first) {
+          first = false
+          return route.fulfill({ status: 422, contentType: 'application/json', body: JSON.stringify({ detail: 'Не получилось собрать коллаж' }) })
+        }
+        return route.fallback()
+      })
+      const dialog = await open(page, title)
+      const fresh = unique('Исправлено')
+      await dialog.getByLabel('Название коллажа').fill(fresh)
+      await dialog.getByRole('button', { name: 'Сохранить' }).click()
+      await expect(dialog.getByRole('alert')).toContainText('Не получилось собрать коллаж')
+      await expect(dialog.getByLabel('Название коллажа')).toHaveValue(fresh)
+      await dialog.getByRole('button', { name: 'Сохранить' }).click()
+      await expect(dialog).toBeHidden()
+      await expect(page.getByRole('listitem').filter({ hasText: fresh }).first()).toBeVisible()
+    })
+
+    test('коллаж удаляется из окна правки с подтверждением', async ({ page }) => {
+      const title = unique('Удалить из окна')
+      await viaApi(page, title, ['k-1', 'k-2'])
+      const dialog = await open(page, title)
+      await dialog.getByRole('button', { name: `Удалить коллаж «${title}»` }).click()
+      await dialog.getByRole('button', { name: 'Отмена' }).last().click()
+      await expect(dialog).toBeVisible()
+      await dialog.getByRole('button', { name: `Удалить коллаж «${title}»` }).click()
+      await dialog.getByRole('button', { name: 'Да, удалить' }).click()
+      await expect(dialog).toBeHidden()
+      await expect(page.getByRole('listitem').filter({ hasText: title })).toHaveCount(0)
+    })
+
+    test('«Команда» правит и удаляет своё, а чужое видит без кнопок; гость кнопок не видит', async ({ page, asRole }) => {
+      const theirs = unique('Коллаж владельца')
+      await viaApi(page, theirs, ['o-1', 'o-2'])
+      await asRole('team')
+      const mine = unique('Коллаж команды')
+      await viaApi(page, mine, ['t-1', 't-2'])
+      await page.goto('/collages')
+      const other = page.getByRole('listitem').filter({ hasText: theirs }).first()
+      await expect(other).toBeVisible()
+      await expect(other.getByRole('button', { name: /^Изменить/ })).toHaveCount(0)
+      await expect(other.getByRole('button', { name: /^Удалить/ })).toHaveCount(0)
+      const own = page.getByRole('listitem').filter({ hasText: mine }).first()
+      await expect(own.getByRole('button', { name: /^Изменить/ })).toBeVisible()
+      await expect(own.getByRole('button', { name: /^Удалить/ })).toBeVisible()
+      await asRole('guest')
+      await page.goto('/collages')
+      await expect(page.getByRole('listitem').filter({ hasText: mine }).first()).toBeVisible()
+      await expect(page.getByRole('button', { name: /^Изменить/ })).toHaveCount(0)
+    })
+
+    test('на телефоне окно правки не уезжает вбок, цели касания не меньше 44 px', async ({ page }) => {
+      const title = unique('Телефон')
+      await viaApi(page, title, ['f-1', 'f-2', 'f-3'])
+      const dialog = await open(page, title)
+      await expect(dialog.getByRole('list', { name: 'Выбранные фото' }).getByRole('listitem')).toHaveCount(3)
+      for (const target of [
+        dialog.getByRole('button', { name: 'Добавить фото' }),
+        dialog.getByRole('button', { name: /^Сдвинуть «f-2.jpg» позже/ }),
+        dialog.getByRole('button', { name: /^Убрать «f-1.jpg»/ }),
+        dialog.getByRole('button', { name: 'Сохранить' }),
+        dialog.getByRole('button', { name: 'Отмена' }),
+        dialog.getByRole('button', { name: `Удалить коллаж «${title}»` }),
+      ]) {
+        await target.scrollIntoViewIfNeeded()
+        const box = await target.boundingBox()
+        expect(box, 'элемент виден').not.toBeNull()
+        expect(box!.height).toBeGreaterThanOrEqual(43.5)
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0)
+    })
+  })
+
   test('справка «i» объясняет раздел', async ({ page }) => {
     await page.goto('/collages')
     await page.getByRole('button', { name: 'О разделе «Коллажи»' }).click()
