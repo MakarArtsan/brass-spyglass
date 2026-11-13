@@ -45,12 +45,16 @@ def ci_contains(
     return func.unicode_fold(column).like(f"%{escaped}%", escape="\\")
 
 
+# Сколько ждёт писавший, пока другой закончит запись (SQLite пишет по одному).
+BUSY_TIMEOUT_MS = 5000
+
+
 def _configure_sqlite(dbapi_conn: sqlite3.Connection, _record: object) -> None:
     cur = dbapi_conn.cursor()
     cur.execute("PRAGMA journal_mode=WAL")
     cur.execute("PRAGMA synchronous=NORMAL")
     cur.execute("PRAGMA foreign_keys=ON")
-    cur.execute("PRAGMA busy_timeout=5000")
+    cur.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
     cur.close()
     # lower() и LIKE в SQLite знают регистр только латиницы: «дозорный» не находил «Дозорный».
     dbapi_conn.create_function("unicode_fold", 1, _fold, deterministic=True)
