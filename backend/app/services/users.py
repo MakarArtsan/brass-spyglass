@@ -1,10 +1,13 @@
 """Пользователи: аккаунт на сайте = аккаунт в Telegram. Создаются только при входе."""
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import set_committed_value
 
+from app import db as database
 from app import models
 from app.config import Settings, get_settings
 from app.constants import USER_COLORS, Role
@@ -13,6 +16,8 @@ from app.services import members
 from app.services.core import log_activity
 
 SEEN_THROTTLE = timedelta(minutes=1)
+# Отметка необязательна: занято — не ждём обычные пять секунд, отметим в следующий раз.
+SEEN_WAIT_MS = 300
 
 
 def pick_color(db: Session) -> str:
@@ -61,9 +66,35 @@ def upsert_from_telegram(
 
 
 def touch_seen(db: Session, user: models.User) -> None:
+    """Отмечает, что человек на сайте, не чаще раза в минуту.
+
+    Пишется отдельной короткой транзакцией, а не правкой в транзакции запроса: та уходит в базу при
+    первом же запросе к данным и держит блокировку записи до конца запроса — пока принимается кусок
+    файла, считается sha256 или файл отдаётся медленному клиенту, писать не может больше никто
+    (на боевом сайте это были `database is locked`)."""
     now = utcnow()
-    if user.last_seen_at is None or now - user.last_seen_at > SEEN_THROTTLE:
-        user.last_seen_at = now
+    if user.last_seen_at is not None and now - user.last_seen_at <= SEEN_THROTTLE:
+        return
+    if _write_seen(user.id, now):
+        # Объект запроса знает о новой отметке, но не считает себя изменённым: записи не будет.
+        set_committed_value(user, "last_seen_at", now)
+
+
+def _write_seen(user_id: int, now: datetime) -> bool:
+    with database.session_factory()() as short:
+        short.connection().exec_driver_sql(f"PRAGMA busy_timeout={SEEN_WAIT_MS}")
+        try:
+            short.execute(
+                update(models.User).where(models.User.id == user_id).values(last_seen_at=now)
+            )
+            short.commit()
+            return True
+        except OperationalError:  # база занята: не ломаем из-за этого запрос человека
+            short.rollback()
+            return False
+        finally:
+            # Соединение вернётся в пул: пусть дальше все ждут столько же, сколько раньше.
+            short.connection().exec_driver_sql(f"PRAGMA busy_timeout={database.BUSY_TIMEOUT_MS}")
 
 
 def revoke_access(db: Session, user: models.User) -> None:
